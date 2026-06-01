@@ -145,12 +145,35 @@ export function NewJobForm({ defaults }: { defaults: Defaults }) {
   return (
     <div className="space-y-5">
       {/* Capture methods */}
-      <div className="grid grid-cols-2 gap-3">
+      <div
+        className="grid grid-cols-2 gap-3 rounded-2xl border-2 border-dashed border-gold/30 p-4 transition-colors hover:border-gold/60"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.style.borderColor = "rgba(240, 165, 0, 0.6)";
+          e.currentTarget.style.backgroundColor = "rgba(240, 165, 0, 0.05)";
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.currentTarget.style.borderColor = "rgba(240, 165, 0, 0.3)";
+          e.currentTarget.style.backgroundColor = "transparent";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.style.borderColor = "rgba(240, 165, 0, 0.3)";
+          e.currentTarget.style.backgroundColor = "transparent";
+          const file = e.dataTransfer.files?.[0];
+          if (file && file.type.startsWith("image/")) {
+            handlePhoto(file);
+          }
+        }}
+      >
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={busy !== null}
-          className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-gold py-6 font-semibold text-navy shadow-gold transition active:scale-[0.98] disabled:opacity-60"
+          className="flex flex-col items-center justify-center gap-2 rounded-lg bg-gold py-6 font-semibold text-navy shadow-gold transition active:scale-[0.98] disabled:opacity-60"
         >
           <CameraIcon className="h-9 w-9" />
           {busy === "image" ? "Reading…" : "Snap Photo"}
@@ -162,11 +185,14 @@ export function NewJobForm({ defaults }: { defaults: Defaults }) {
             speech.reset();
           }}
           disabled={busy !== null}
-          className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-gold/50 bg-navy-700/60 py-6 font-semibold text-gold-400 transition active:scale-[0.98] disabled:opacity-60"
+          className="flex flex-col items-center justify-center gap-2 rounded-lg border border-gold/50 bg-navy-700/60 py-6 font-semibold text-gold-400 transition active:scale-[0.98] disabled:opacity-60"
         >
           <MicIcon className="h-9 w-9" />
           Speak It
         </button>
+        <p className="col-span-2 text-center text-xs text-slate-400">
+          or drop a photo here
+        </p>
       </div>
       <input
         ref={fileInputRef}

@@ -15,8 +15,8 @@ function getClient(): Anthropic {
 const SYSTEM_PROMPT = `You are parsing a handwritten or printed truck-parts job sheet.
 
 Extract the following:
-- job number
-- customer name
+- job number / ticket number (look for "Ticket #:", "Job #:", "Ticket:", "Job Number:", etc.)
+- customer name (look for "Customer:", "Name:", "Bill To:", "Sold To:", etc.)
 - date
 - technician name (if present)
 - truck ID (if present)
