@@ -142,8 +142,8 @@ insert into storage.buckets (id, name, public)
 values ('job-images', 'job-images', true)
 on conflict (id) do nothing;
 
-create policy "job_images_read" on storage.objects
-  for select using (bucket_id = 'job-images');
+-- Public bucket: objects are served via public URL, so no SELECT policy is
+-- needed (and a broad one would let clients list every file). Only scope writes.
 create policy "job_images_insert_own" on storage.objects
   for insert to authenticated
   with check (bucket_id = 'job-images' and owner = auth.uid());
