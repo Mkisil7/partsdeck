@@ -34,7 +34,8 @@ Then fill in each variable:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard → Settings → API → `anon` / `public` key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Settings → API → `service_role` key |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API keys |
-| `RESEND_API_KEY` | _(optional)_ [resend.com](https://resend.com) → API keys (not needed; transfer emails are drafts you send manually) |
+| `RESEND_API_KEY` | [resend.com](https://resend.com) → API keys (sends the transfer email) |
+| `RESEND_FROM_EMAIL` | _(optional)_ a verified Resend sender; defaults to `onboarding@resend.dev` |
 | `WAREHOUSE_EMAIL_DEFAULT` | Your warehouse email (pre-fills the transfer form) |
 
 **Why `.env.local` is local-only:** This file contains API keys and secrets. It's in `.gitignore` so it never gets committed. Only `.env.local.example` (with no real secrets) is in git.
@@ -70,7 +71,7 @@ Open http://localhost:3000. You'll be routed to `/login` — create an account a
 - **Dashboard** — open/transferred/pending stat cards, recent jobs with color
   status badges, search (job #, customer, part) and date-range filtering.
 - **Job detail** — edit part quantities inline, change status, and
-  **Generate transfer email** (creates a draft HTML you copy/download and send manually).
+  **Send to Warehouse** (emails the parts list via Resend + marks job transferred).
 - **Inventory** — aggregate of parts across open jobs, grouped by category,
   with totals and a highlight for parts ordered on 3+ jobs.
 - **Settings** — default warehouse email, technician name, truck ID (pre-fill
