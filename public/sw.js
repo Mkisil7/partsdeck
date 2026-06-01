@@ -1,11 +1,13 @@
 // PartsDeck service worker — offline viewing of cached read requests.
-const CACHE = "partsdeck-v1";
-const PRECACHE = ["/dashboard", "/inventory", "/manifest.webmanifest"];
+// Bump CACHE on any change here so old caches are purged on activate.
+const CACHE = "partsdeck-v2";
+const PRECACHE = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)).catch(() => {}),
   );
+  // Take over as soon as installed so new deploys apply on next load.
   self.skipWaiting();
 });
 
@@ -15,9 +17,14 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) =>
         Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
-      ),
+      )
+      .then(() => self.clients.claim()),
   );
-  self.clients.claim();
+});
+
+// Allow the page to tell a waiting worker to activate immediately.
+self.addEventListener("message", (event) => {
+  if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -36,24 +43,28 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages + static assets: network-first, fall back to cache when offline.
+  // Navigations (HTML): always go to network so a new deploy shows up
+  // immediately; only fall back to cache when truly offline.
+  if (request.mode === "navigate") {
+    event.respondWith(networkFirst(request, { cacheOnSuccess: false }));
+    return;
+  }
+
+  // Static assets (hashed JS/CSS, images): network-first, cache as backup.
   event.respondWith(networkFirst(request));
 });
 
-async function networkFirst(request) {
+async function networkFirst(request, { cacheOnSuccess = true } = {}) {
   const cache = await caches.open(CACHE);
   try {
     const response = await fetch(request);
-    if (response && response.ok) cache.put(request, response.clone());
+    if (cacheOnSuccess && response && response.ok) {
+      cache.put(request, response.clone());
+    }
     return response;
   } catch (err) {
     const cached = await cache.match(request);
     if (cached) return cached;
-    // Last resort: cached dashboard shell for navigations.
-    if (request.mode === "navigate") {
-      const shell = await cache.match("/dashboard");
-      if (shell) return shell;
-    }
     throw err;
   }
 }
