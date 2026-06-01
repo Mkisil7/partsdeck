@@ -1,7 +1,6 @@
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getOpenJobParts } from "@/lib/queries";
-import type { Part, PartCategory } from "@/lib/types";
-import { PART_CATEGORIES } from "@/lib/types";
+import type { Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -11,16 +10,38 @@ interface AggregatedPart {
   part_name: string;
   part_number: string | null;
   unit: string;
-  category: PartCategory | "uncategorized";
+  bucket: "google" | "v5" | "command" | "doorlock" | "other";
   totalQuantity: number;
-  occurrences: number; // how many separate line items / jobs
+  occurrences: number;
+}
+
+function getBucket(sku: string | null): AggregatedPart["bucket"] {
+  const s = (sku || "").toLowerCase().trim();
+
+  // Google: starts with "ga"
+  if (s.startsWith("ga")) return "google";
+
+  // V5: starts with "s" OR is exactly ADTPLUS-YS-R0-29 (case-insensitive)
+  if (s.startsWith("s")) return "v5";
+  if (s === "adtplus-ys-r0-29") return "v5";
+
+  // Doorlock: starts with "yrd"
+  if (s.startsWith("yrd")) return "doorlock";
+
+  // Command: starts with "six", "adt" (except ADTPLUS), or "aio", "wts"
+  if (s.startsWith("six") || s.startsWith("aio") || s.startsWith("wts"))
+    return "command";
+  if (s.startsWith("adt") && s !== "adtplus-ys-r0-29") return "command";
+
+  // Everything else: Nighthawk, UB, or anything else
+  return "other";
 }
 
 function aggregate(parts: Part[]): AggregatedPart[] {
   const map = new Map<string, AggregatedPart>();
   for (const part of parts) {
-    const cat = (part.category ?? "uncategorized") as AggregatedPart["category"];
-    const key = `${cat}::${(part.part_number || part.part_name).toLowerCase()}`;
+    const bucket = getBucket(part.part_number);
+    const key = `${bucket}::${(part.part_number || part.part_name).toLowerCase()}`;
     const existing = map.get(key);
     if (existing) {
       existing.totalQuantity += part.quantity;
@@ -33,7 +54,7 @@ function aggregate(parts: Part[]): AggregatedPart[] {
         part_name: part.part_name,
         part_number: part.part_number,
         unit: part.unit,
-        category: cat,
+        bucket,
         totalQuantity: part.quantity,
         occurrences: 1,
       });
@@ -42,10 +63,21 @@ function aggregate(parts: Part[]): AggregatedPart[] {
   return Array.from(map.values());
 }
 
-const CATEGORY_ORDER: AggregatedPart["category"][] = [
-  ...PART_CATEGORIES,
-  "uncategorized",
+const BUCKET_ORDER: AggregatedPart["bucket"][] = [
+  "google",
+  "v5",
+  "command",
+  "doorlock",
+  "other",
 ];
+
+const BUCKET_LABELS: Record<AggregatedPart["bucket"], string> = {
+  google: "Google",
+  v5: "V5",
+  command: "Command",
+  doorlock: "Doorlock",
+  other: "Other",
+};
 
 export default async function InventoryPage() {
   const parts = await getOpenJobParts();
@@ -54,10 +86,10 @@ export default async function InventoryPage() {
   const totalUnits = aggregated.reduce((sum, p) => sum + p.totalQuantity, 0);
   const frequent = aggregated.filter((p) => p.occurrences >= 3).length;
 
-  const byCategory = CATEGORY_ORDER.map((category) => ({
-    category,
+  const byBucket = BUCKET_ORDER.map((bucket) => ({
+    bucket,
     items: aggregated
-      .filter((p) => p.category === category)
+      .filter((p) => p.bucket === bucket)
       .sort((a, b) => b.totalQuantity - a.totalQuantity),
   })).filter((group) => group.items.length > 0);
 
@@ -74,16 +106,16 @@ export default async function InventoryPage() {
         <Stat label="Frequent (3+)" value={frequent} accent />
       </div>
 
-      {byCategory.length === 0 ? (
+      {byBucket.length === 0 ? (
         <div className="card text-center text-sm text-slate-400">
           No parts on open jobs yet. Create a job to start tracking inventory.
         </div>
       ) : (
         <div className="space-y-6">
-          {byCategory.map((group) => (
-            <section key={group.category}>
-              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gold-400 capitalize">
-                {group.category}
+          {byBucket.map((group) => (
+            <section key={group.bucket}>
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gold-400">
+                {BUCKET_LABELS[group.bucket]}
               </h2>
               <ul className="space-y-2">
                 {group.items.map((item) => (
