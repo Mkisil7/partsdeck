@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser, jsonError } from "@/lib/api";
 import { getJobsWithCounts } from "@/lib/queries";
+import { dedupePartDrafts } from "@/lib/draft";
 import type { JobDraft, ParsedJob } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -62,8 +63,7 @@ export async function POST(request: Request) {
     return jsonError(jobError?.message ?? "Failed to create job", 500);
   }
 
-  const partRows = (draft.parts ?? [])
-    .filter((p) => p.part_name.trim() || p.part_number.trim())
+  const partRows = dedupePartDrafts(draft.parts ?? [])
     .map((p) => {
       const qty = parseInt(p.quantity, 10);
       return {

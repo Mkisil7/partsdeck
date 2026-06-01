@@ -33,6 +33,9 @@ export async function PATCH(
 
   let body: Partial<{
     status: JobStatus;
+    job_number: string;
+    customer_name: string;
+    job_date: string;
     notes: string | null;
     technician_name: string | null;
     truck_id: string | null;
@@ -47,6 +50,18 @@ export async function PATCH(
   if (body.status !== undefined) {
     if (!VALID_STATUS.includes(body.status)) return jsonError("Invalid status");
     update.status = body.status;
+  }
+  if (body.job_number !== undefined) {
+    if (!body.job_number.trim()) return jsonError("Job number cannot be empty");
+    update.job_number = body.job_number.trim();
+  }
+  if (body.customer_name !== undefined) {
+    if (!body.customer_name.trim()) return jsonError("Customer name cannot be empty");
+    update.customer_name = body.customer_name.trim();
+  }
+  if (body.job_date !== undefined) {
+    if (!body.job_date) return jsonError("Job date cannot be empty");
+    update.job_date = body.job_date;
   }
   if (body.notes !== undefined) update.notes = body.notes;
   if (body.technician_name !== undefined) update.technician_name = body.technician_name;

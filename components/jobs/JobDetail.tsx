@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { EditablePart } from "./EditablePart";
+import { AddPartForm, type NewPartInput } from "./AddPartForm";
 import { formatDate } from "@/lib/utils";
 import type { JobStatus, JobWithParts, Part } from "@/lib/types";
 
@@ -22,13 +24,33 @@ export function JobDetail({
   const [showTransfer, setShowTransfer] = useState(false);
   const [warehouseEmail, setWarehouseEmail] = useState(defaultWarehouseEmail);
   const [sending, setSending] = useState(false);
-  const [savingPart, setSavingPart] = useState<string | null>(null);
+  const [busyPart, setBusyPart] = useState(false);
+
+  // Header edit
+  const [editingHeader, setEditingHeader] = useState(false);
+  const [header, setHeader] = useState({
+    job_number: job.job_number,
+    customer_name: job.customer_name,
+    job_date: job.job_date,
+    technician_name: job.technician_name ?? "",
+    truck_id: job.truck_id ?? "",
+    notes: job.notes ?? "",
+  });
+  const [savingHeader, setSavingHeader] = useState(false);
+
+  // -- Parts: refresh from server (used after add/merge) -------------------
+  async function refreshParts() {
+    const res = await fetch(`/api/jobs/${job.id}`);
+    if (res.ok) {
+      const json = await res.json();
+      setParts(json.job.parts as Part[]);
+    }
+  }
 
   async function changeQuantity(part: Part, next: number) {
     const quantity = Math.max(0, next);
     const prev = part.quantity;
     setParts((ps) => ps.map((p) => (p.id === part.id ? { ...p, quantity } : p)));
-    setSavingPart(part.id);
     try {
       const res = await fetch(`/api/parts/${part.id}`, {
         method: "PATCH",
@@ -39,8 +61,97 @@ export function JobDetail({
     } catch (err) {
       setParts((ps) => ps.map((p) => (p.id === part.id ? { ...p, quantity: prev } : p)));
       toast(err instanceof Error ? err.message : "Could not update", "error");
+    }
+  }
+
+  async function savePart(part: Part, patch: Partial<Part>) {
+    setParts((ps) => ps.map((p) => (p.id === part.id ? { ...p, ...patch } : p)));
+    setBusyPart(true);
+    try {
+      const res = await fetch(`/api/parts/${part.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Update failed");
+      toast("Part updated", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not update", "error");
+      refreshParts();
     } finally {
-      setSavingPart(null);
+      setBusyPart(false);
+    }
+  }
+
+  async function deletePart(part: Part) {
+    if (!confirm(`Remove ${part.part_name}?`)) return;
+    const snapshot = parts;
+    setParts((ps) => ps.filter((p) => p.id !== part.id));
+    setBusyPart(true);
+    try {
+      const res = await fetch(`/api/parts/${part.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+    } catch (err) {
+      setParts(snapshot);
+      toast(err instanceof Error ? err.message : "Could not delete", "error");
+    } finally {
+      setBusyPart(false);
+    }
+  }
+
+  async function addPart(input: NewPartInput) {
+    setBusyPart(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/parts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Add failed");
+      await refreshParts();
+      toast(json.merged ? "Merged into existing part" : "Part added", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not add part", "error");
+    } finally {
+      setBusyPart(false);
+    }
+  }
+
+  async function saveHeader() {
+    if (!header.job_number.trim()) return toast("Job number is required", "error");
+    if (!header.customer_name.trim()) return toast("Customer is required", "error");
+    setSavingHeader(true);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_number: header.job_number,
+          customer_name: header.customer_name,
+          job_date: header.job_date,
+          technician_name: header.technician_name || null,
+          truck_id: header.truck_id || null,
+          notes: header.notes || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Update failed");
+      setJob((j) => ({
+        ...j,
+        job_number: header.job_number.trim(),
+        customer_name: header.customer_name.trim(),
+        job_date: header.job_date,
+        technician_name: header.technician_name || null,
+        truck_id: header.truck_id || null,
+        notes: header.notes || null,
+      }));
+      setEditingHeader(false);
+      toast("Job updated", "success");
+      router.refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not update", "error");
+    } finally {
+      setSavingHeader(false);
     }
   }
 
@@ -99,46 +210,149 @@ export function JobDetail({
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="card space-y-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-100">#{job.job_number}</h1>
-              <StatusBadge status={job.status} />
+        {editingHeader ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="col-span-1">
+                <span className="mb-1 block text-xs text-slate-500">Job #</span>
+                <input
+                  className="input py-2"
+                  value={header.job_number}
+                  onChange={(e) => setHeader({ ...header, job_number: e.target.value })}
+                />
+              </label>
+              <label className="col-span-1">
+                <span className="mb-1 block text-xs text-slate-500">Date</span>
+                <input
+                  type="date"
+                  className="input py-2"
+                  value={header.job_date}
+                  onChange={(e) => setHeader({ ...header, job_date: e.target.value })}
+                />
+              </label>
+              <label className="col-span-2">
+                <span className="mb-1 block text-xs text-slate-500">Customer</span>
+                <input
+                  className="input py-2"
+                  value={header.customer_name}
+                  onChange={(e) =>
+                    setHeader({ ...header, customer_name: e.target.value })
+                  }
+                />
+              </label>
+              <label className="col-span-1">
+                <span className="mb-1 block text-xs text-slate-500">Technician</span>
+                <input
+                  className="input py-2"
+                  value={header.technician_name}
+                  onChange={(e) =>
+                    setHeader({ ...header, technician_name: e.target.value })
+                  }
+                />
+              </label>
+              <label className="col-span-1">
+                <span className="mb-1 block text-xs text-slate-500">Truck ID</span>
+                <input
+                  className="input py-2"
+                  value={header.truck_id}
+                  onChange={(e) => setHeader({ ...header, truck_id: e.target.value })}
+                />
+              </label>
+              <label className="col-span-2">
+                <span className="mb-1 block text-xs text-slate-500">Notes</span>
+                <textarea
+                  className="input min-h-[60px] py-2"
+                  value={header.notes}
+                  onChange={(e) => setHeader({ ...header, notes: e.target.value })}
+                />
+              </label>
             </div>
-            <p className="text-slate-300">{job.customer_name}</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={saveHeader}
+                disabled={savingHeader}
+                className="btn-gold flex-1 py-2 text-sm"
+              >
+                {savingHeader ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost py-2 text-sm"
+                onClick={() => {
+                  setHeader({
+                    job_number: job.job_number,
+                    customer_name: job.customer_name,
+                    job_date: job.job_date,
+                    technician_name: job.technician_name ?? "",
+                    truck_id: job.truck_id ?? "",
+                    notes: job.notes ?? "",
+                  });
+                  setEditingHeader(false);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-          <span className="text-sm text-slate-400">{formatDate(job.job_date)}</span>
-        </div>
-
-        <dl className="grid grid-cols-2 gap-2 text-sm">
-          {job.technician_name && (
-            <div>
-              <dt className="text-slate-500">Technician</dt>
-              <dd className="text-slate-200">{job.technician_name}</dd>
+        ) : (
+          <>
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-bold text-slate-100">
+                    #{job.job_number}
+                  </h1>
+                  <StatusBadge status={job.status} />
+                </div>
+                <p className="text-slate-300">{job.customer_name}</p>
+              </div>
+              <div className="text-right">
+                <span className="block text-sm text-slate-400">
+                  {formatDate(job.job_date)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEditingHeader(true)}
+                  className="mt-1 text-xs text-gold-400 hover:underline"
+                >
+                  Edit
+                </button>
+              </div>
             </div>
-          )}
-          {job.truck_id && (
-            <div>
-              <dt className="text-slate-500">Truck</dt>
-              <dd className="text-slate-200">{job.truck_id}</dd>
-            </div>
-          )}
-        </dl>
 
-        {job.notes && (
-          <p className="whitespace-pre-wrap rounded-lg bg-navy-700/50 p-3 text-sm text-slate-300">
-            {job.notes}
-          </p>
-        )}
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              {job.technician_name && (
+                <div>
+                  <dt className="text-slate-500">Technician</dt>
+                  <dd className="text-slate-200">{job.technician_name}</dd>
+                </div>
+              )}
+              {job.truck_id && (
+                <div>
+                  <dt className="text-slate-500">Truck</dt>
+                  <dd className="text-slate-200">{job.truck_id}</dd>
+                </div>
+              )}
+            </dl>
 
-        {job.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={job.image_url}
-            alt="Job sheet"
-            className="w-full rounded-lg border border-navy-600"
-          />
+            {job.notes && (
+              <p className="whitespace-pre-wrap rounded-lg bg-navy-700/50 p-3 text-sm text-slate-300">
+                {job.notes}
+              </p>
+            )}
+
+            {job.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={job.image_url}
+                alt="Job sheet"
+                className="w-full rounded-lg border border-navy-600"
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -149,54 +363,22 @@ export function JobDetail({
         </h2>
         <ul className="space-y-2">
           {parts.map((part) => (
-            <li
+            <EditablePart
               key={part.id}
-              className="card flex items-center justify-between gap-3 py-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-slate-100">{part.part_name}</p>
-                <p className="text-xs text-slate-500">
-                  {part.part_number ? (
-                    <span className="font-mono">{part.part_number}</span>
-                  ) : (
-                    "no SKU"
-                  )}
-                  {part.category ? ` · ${part.category}` : ""}
-                </p>
-                {part.notes && (
-                  <p className="text-xs text-slate-400">{part.notes}</p>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Decrease quantity"
-                  onClick={() => changeQuantity(part, part.quantity - 1)}
-                  disabled={savingPart === part.id}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-navy-600 text-lg text-slate-200"
-                >
-                  −
-                </button>
-                <span className="w-12 text-center text-sm tabular-nums text-slate-100">
-                  {part.quantity}
-                  <span className="block text-[10px] text-slate-500">{part.unit}</span>
-                </span>
-                <button
-                  type="button"
-                  aria-label="Increase quantity"
-                  onClick={() => changeQuantity(part, part.quantity + 1)}
-                  disabled={savingPart === part.id}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-navy-600 text-lg text-slate-200"
-                >
-                  +
-                </button>
-              </div>
-            </li>
+              part={part}
+              busy={busyPart}
+              onQuantity={(next) => changeQuantity(part, next)}
+              onSave={(patch) => savePart(part, patch)}
+              onDelete={() => deletePart(part)}
+            />
           ))}
           {parts.length === 0 && (
-            <li className="card text-sm text-slate-400">No parts on this job.</li>
+            <li className="card text-sm text-slate-400">No parts on this job yet.</li>
           )}
         </ul>
+        <div className="mt-2">
+          <AddPartForm busy={busyPart} onAdd={addPart} />
+        </div>
       </div>
 
       {/* Transfer panel */}

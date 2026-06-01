@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { parseSpeech } from "@/lib/anthropic";
+import { enrichParsedParts } from "@/lib/master";
 import { requireUser, jsonError } from "@/lib/api";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const { error: authError } = await requireUser();
+  const { ctx, error: authError } = await requireUser();
   if (authError) return authError;
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -25,6 +26,7 @@ export async function POST(request: Request) {
 
   try {
     const parsed = await parseSpeech(transcript);
+    parsed.parts = await enrichParsedParts(ctx.supabase, parsed.parts);
     return NextResponse.json({ parsed });
   } catch (err) {
     console.error("parse-speech failed", err);

@@ -56,6 +56,18 @@ export interface UserSettings {
   updated_at: string;
 }
 
+export interface MasterPart {
+  id: string;
+  sku: string | null;
+  part_name: string;
+  category: PartCategory | null;
+  unit: string;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Composite / view types
 // ---------------------------------------------------------------------------

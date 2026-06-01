@@ -5,6 +5,7 @@ import type {
   Job,
   JobWithParts,
   JobWithPartsCount,
+  MasterPart,
   Part,
   UserSettings,
 } from "./types";
@@ -97,6 +98,16 @@ export async function getOpenJobParts(): Promise<Part[]> {
     for (const part of job.parts ?? []) parts.push(part as Part);
   }
   return parts;
+}
+
+export async function getMasterParts(): Promise<MasterPart[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("master_parts")
+    .select("*")
+    .order("part_name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MasterPart[];
 }
 
 export async function getUserSettings(): Promise<UserSettings | null> {
