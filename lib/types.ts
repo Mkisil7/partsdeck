@@ -68,6 +68,14 @@ export interface MasterPart {
   updated_at: string;
 }
 
+export interface IgnoredItem {
+  id: string;
+  sku: string | null;
+  part_name: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Composite / view types
 // ---------------------------------------------------------------------------

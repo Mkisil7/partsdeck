@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseImage } from "@/lib/anthropic";
-import { enrichParsedParts } from "@/lib/master";
+import { enrichParsedParts, filterIgnoredParts } from "@/lib/master";
 import { requireUser, jsonError } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -35,6 +35,7 @@ export async function POST(request: Request) {
   try {
     const parsed = await parseImage(base64, mediaType);
     parsed.parts = await enrichParsedParts(ctx.supabase, parsed.parts);
+    parsed.parts = await filterIgnoredParts(ctx.supabase, parsed.parts);
     return NextResponse.json({ parsed });
   } catch (err) {
     console.error("parse-image failed", err);

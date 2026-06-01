@@ -2,6 +2,7 @@
 // client, so results are automatically limited to the signed-in user.
 import { createSupabaseServerClient } from "./supabase";
 import type {
+  IgnoredItem,
   Job,
   JobWithParts,
   JobWithPartsCount,
@@ -108,6 +109,16 @@ export async function getMasterParts(): Promise<MasterPart[]> {
     .order("part_name", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as MasterPart[];
+}
+
+export async function getIgnoredItems(): Promise<IgnoredItem[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("ignored_items")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as IgnoredItem[];
 }
 
 export async function getUserSettings(): Promise<UserSettings | null> {
