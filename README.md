@@ -16,42 +16,47 @@ parts request to your warehouse.
 
 ## Getting started
 
-1. **Install dependencies**
+### 1. Environment variables
 
-   ```bash
-   npm install
-   ```
+`.env.local.example` is in git as a **template**. You need to create your own `.env.local` file locally (it's in `.gitignore` so it won't be committed — this keeps secrets out of the repo).
 
-2. **Configure environment** — copy the example and fill in your keys:
+**Create `.env.local`:**
 
-   ```bash
-   cp .env.local.example .env.local
-   ```
+```bash
+cp .env.local.example .env.local
+```
 
-   | Variable | Purpose |
-   | --- | --- |
-   | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
-   | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-only) |
-   | `ANTHROPIC_API_KEY` | Anthropic API key for parsing |
-   | `RESEND_API_KEY` | Resend API key for email |
-   | `WAREHOUSE_EMAIL_DEFAULT` | Fallback warehouse email |
-   | `RESEND_FROM_EMAIL` | _(optional)_ verified Resend sender |
+Then fill in each variable:
 
-3. **Apply the database migration** — run the SQL in
-   `supabase/migrations/0001_init.sql` against your project (Supabase SQL editor,
-   `supabase db push`, or the MCP `apply_migration` tool). It creates the
-   `jobs`, `parts`, `transfer_requests`, and `user_settings` tables with RLS
-   policies and a public `job-images` storage bucket.
+| Variable | Get it from |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase dashboard → Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase dashboard → Settings → API → `anon` / `public` key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Settings → API → `service_role` key |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) → API keys |
+| `RESEND_API_KEY` | _(optional)_ [resend.com](https://resend.com) → API keys (not needed; transfer emails are drafts you send manually) |
+| `WAREHOUSE_EMAIL_DEFAULT` | Your warehouse email (pre-fills the transfer form) |
 
-4. **Run it**
+**Why `.env.local` is local-only:** This file contains API keys and secrets. It's in `.gitignore` so it never gets committed. Only `.env.local.example` (with no real secrets) is in git.
 
-   ```bash
-   npm run dev
-   ```
+### 2. Install & migrate
 
-   Open http://localhost:3000 — you'll be routed to `/login`. Create an account,
-   then you land on the dashboard.
+```bash
+npm install
+```
+
+Apply the Supabase migration to create the database schema:
+
+- **Via Supabase dashboard:** Go to SQL editor, paste the contents of `supabase/migrations/0001_init.sql`, and run it.
+- **Or via CLI:** `supabase db push` (if you have Supabase CLI set up locally).
+
+### 3. Run
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000. You'll be routed to `/login` — create an account and start using the app.
 
 ## Features
 
@@ -65,7 +70,7 @@ parts request to your warehouse.
 - **Dashboard** — open/transferred/pending stat cards, recent jobs with color
   status badges, search (job #, customer, part) and date-range filtering.
 - **Job detail** — edit part quantities inline, change status, and
-  **Send to Warehouse** (Resend email + marks job transferred).
+  **Generate transfer email** (creates a draft HTML you copy/download and send manually).
 - **Inventory** — aggregate of parts across open jobs, grouped by category,
   with totals and a highlight for parts ordered on 3+ jobs.
 - **Settings** — default warehouse email, technician name, truck ID (pre-fill
