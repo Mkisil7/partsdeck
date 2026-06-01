@@ -101,6 +101,29 @@ export async function getOpenJobParts(): Promise<Part[]> {
   return parts;
 }
 
+/** A part pulled off a truck, tagged with the job date it was used on. */
+export interface UsagePart extends Part {
+  job_date: string; // YYYY-MM-DD from the parent job
+}
+
+/** Every part across ALL jobs, each tagged with its job's date. Drives the
+ *  usage tracker (parts coming off inventory, windowed by week/month). */
+export async function getUsageParts(): Promise<UsagePart[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("job_date, parts(*)");
+  if (error) throw new Error(error.message);
+
+  const out: UsagePart[] = [];
+  for (const job of (data ?? []) as any[]) {
+    for (const part of job.parts ?? []) {
+      out.push({ ...(part as Part), job_date: job.job_date });
+    }
+  }
+  return out;
+}
+
 export async function getMasterParts(): Promise<MasterPart[]> {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
