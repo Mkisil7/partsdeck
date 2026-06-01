@@ -16,17 +16,37 @@ export default function LoginPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const ALLOWED_DOMAIN = "adt.com";
+  const isAllowedEmail = (value: string) =>
+    value.trim().toLowerCase().split("@")[1] === ALLOWED_DOMAIN;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setMessage(null);
+
+    // PartsDeck is restricted to ADT staff.
+    if (!isAllowedEmail(email)) {
+      setError(`Use your @${ALLOWED_DOMAIN} email address to access PartsDeck.`);
+      setLoading(false);
+      return;
+    }
+
     const supabase = createSupabaseBrowserClient();
 
     if (mode === "signup") {
       const { error } = await supabase.auth.signUp({ email, password });
-      if (error) setError(error.message);
-      else setMessage("Account created. You can sign in now.");
+      if (error) {
+        // The DB trigger rejects non-@adt.com emails with a generic message.
+        setError(
+          /email|domain|adt/i.test(error.message)
+            ? `Sign-ups are restricted to @${ALLOWED_DOMAIN} email addresses.`
+            : error.message,
+        );
+      } else {
+        setMessage("Account created. You can sign in now.");
+      }
       setLoading(false);
       return;
     }
@@ -49,6 +69,7 @@ export default function LoginPage() {
         </div>
         <h1 className="text-2xl font-bold text-slate-100">PartsDeck</h1>
         <p className="mt-1 text-sm text-slate-400">Truck parts inventory tracker</p>
+        <p className="mt-1 text-xs text-slate-500">ADT staff only — sign in with your @adt.com email</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card w-full max-w-sm space-y-4">
