@@ -21,12 +21,7 @@ export function JobDetail({
   const [parts, setParts] = useState<Part[]>(initialJob.parts);
   const [showTransfer, setShowTransfer] = useState(false);
   const [warehouseEmail, setWarehouseEmail] = useState(defaultWarehouseEmail);
-  const [generating, setGenerating] = useState(false);
-  const [draft, setDraft] = useState<{
-    emailSubject: string;
-    emailHtml: string;
-    to: string;
-  } | null>(null);
+  const [sending, setSending] = useState(false);
   const [savingPart, setSavingPart] = useState<string | null>(null);
 
   async function changeQuantity(part: Part, next: number) {
@@ -67,9 +62,9 @@ export function JobDetail({
     }
   }
 
-  async function generateDraft() {
+  async function sendTransfer() {
     if (!warehouseEmail.trim()) return toast("Enter a warehouse email", "error");
-    setGenerating(true);
+    setSending(true);
     try {
       const res = await fetch("/api/send-transfer", {
         method: "POST",
@@ -77,31 +72,16 @@ export function JobDetail({
         body: JSON.stringify({ job_id: job.id, warehouse_email: warehouseEmail.trim() }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Generate failed");
-      setDraft(json.draft);
-      toast("Email draft ready — copy or download to send", "info");
+      if (!res.ok) throw new Error(json.error || "Send failed");
+      toast("Transfer sent to warehouse", "success");
+      setShowTransfer(false);
+      setJob((j) => ({ ...j, status: "transferred" }));
+      router.refresh();
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not generate draft", "error");
+      toast(err instanceof Error ? err.message : "Could not send", "error");
     } finally {
-      setGenerating(false);
+      setSending(false);
     }
-  }
-
-  function downloadDraft() {
-    if (!draft) return;
-    const blob = new Blob([draft.emailHtml], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `transfer-job-${job.job_number}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function copyDraftHtml() {
-    if (!draft) return;
-    navigator.clipboard.writeText(draft.emailHtml);
-    toast("HTML copied to clipboard", "success");
   }
 
   async function deleteJob() {
@@ -220,56 +200,9 @@ export function JobDetail({
       </div>
 
       {/* Transfer panel */}
-      {draft ? (
+      {showTransfer ? (
         <div className="card space-y-3 animate-fade-in">
-          <h3 className="font-semibold text-slate-100">Email draft ready</h3>
-          <p className="text-sm text-slate-300">
-            To: <span className="font-semibold">{draft.to}</span>
-          </p>
-          <p className="text-sm text-slate-300">
-            Subject: <span className="font-semibold">{draft.emailSubject}</span>
-          </p>
-
-          <div className="max-h-64 overflow-y-auto rounded-lg border border-navy-600 bg-white p-4">
-            <iframe
-              srcDoc={draft.emailHtml}
-              className="h-48 w-full border-none"
-              title="Email preview"
-            />
-          </div>
-
-          <p className="text-xs text-slate-500">
-            Copy the HTML below and paste into your email client, or download to
-            save the file.
-          </p>
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <button
-              type="button"
-              onClick={copyDraftHtml}
-              className="btn-ghost flex-1"
-            >
-              Copy HTML
-            </button>
-            <button
-              type="button"
-              onClick={downloadDraft}
-              className="btn-ghost flex-1"
-            >
-              Download
-            </button>
-            <button
-              type="button"
-              onClick={() => setDraft(null)}
-              className="btn-ghost flex-1"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      ) : showTransfer ? (
-        <div className="card space-y-3 animate-fade-in">
-          <h3 className="font-semibold text-slate-100">Generate transfer email</h3>
+          <h3 className="font-semibold text-slate-100">Send to Warehouse</h3>
           <label>
             <span className="label">Warehouse email</span>
             <input
@@ -281,17 +214,16 @@ export function JobDetail({
             />
           </label>
           <p className="text-xs text-slate-500">
-            Creates a formatted parts list email that you can copy and send
-            manually, or download as HTML.
+            Sends a formatted parts list and marks this job as transferred.
           </p>
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={generateDraft}
-              disabled={generating}
+              onClick={sendTransfer}
+              disabled={sending}
               className="btn-gold flex-1"
             >
-              {generating ? "Generating…" : "Generate email"}
+              {sending ? "Sending…" : "Send email"}
             </button>
             <button
               type="button"
@@ -308,7 +240,7 @@ export function JobDetail({
           onClick={() => setShowTransfer(true)}
           className="btn-gold w-full"
         >
-          Generate transfer email
+          Send to Warehouse
         </button>
       )}
 
