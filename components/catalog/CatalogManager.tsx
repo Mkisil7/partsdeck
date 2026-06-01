@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
-import { PART_CATEGORIES, type MasterPart, type PartCategory } from "@/lib/types";
+import { type MasterPart } from "@/lib/types";
 
 export function CatalogManager({ initial }: { initial: MasterPart[] }) {
   const { toast } = useToast();
@@ -13,8 +13,6 @@ export function CatalogManager({ initial }: { initial: MasterPart[] }) {
   // Add form
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
-  const [category, setCategory] = useState<PartCategory | "">("");
-  const [unit, setUnit] = useState("each");
   const [adding, setAdding] = useState(false);
 
   const filtered = useMemo(() => {
@@ -45,8 +43,6 @@ export function CatalogManager({ initial }: { initial: MasterPart[] }) {
         body: JSON.stringify({
           sku: sku.trim(),
           part_name: name.trim() || sku.trim(),
-          category: category || null,
-          unit: unit.trim() || "each",
         }),
       });
       const json = await res.json();
@@ -58,8 +54,6 @@ export function CatalogManager({ initial }: { initial: MasterPart[] }) {
       );
       setSku("");
       setName("");
-      setCategory("");
-      setUnit("each");
       toast("Added to catalog", "success");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not add", "error");
@@ -101,7 +95,7 @@ export function CatalogManager({ initial }: { initial: MasterPart[] }) {
       {/* Add a single entry */}
       <div className="card space-y-2">
         <h2 className="text-sm font-semibold text-slate-200">Add a part</h2>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2">
           <input
             className="input py-2"
             placeholder="SKU / Part #"
@@ -110,28 +104,10 @@ export function CatalogManager({ initial }: { initial: MasterPart[] }) {
           />
           <input
             className="input py-2"
-            placeholder="Unit (each)"
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-          />
-          <input
-            className="input col-span-2 py-2"
             placeholder="Part name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <select
-            className="input col-span-2 py-2"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as PartCategory | "")}
-          >
-            <option value="">Category —</option>
-            {PART_CATEGORIES.map((c) => (
-              <option key={c} value={c} className="bg-navy-800 capitalize">
-                {c}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="flex gap-2">
           <button
@@ -200,34 +176,19 @@ function CatalogRow({
   const [editing, setEditing] = useState(false);
   const [sku, setSku] = useState(part.sku ?? "");
   const [name, setName] = useState(part.part_name);
-  const [category, setCategory] = useState<PartCategory | "">(
-    (part.category ?? "") as PartCategory | "",
-  );
 
   if (editing) {
     return (
       <li className="card space-y-2 py-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-2">
           <input
             className="input py-2"
             placeholder="SKU"
             value={sku}
             onChange={(e) => setSku(e.target.value)}
           />
-          <select
-            className="input py-2"
-            value={category}
-            onChange={(e) => setCategory(e.target.value as PartCategory | "")}
-          >
-            <option value="">Category —</option>
-            {PART_CATEGORIES.map((c) => (
-              <option key={c} value={c} className="bg-navy-800 capitalize">
-                {c}
-              </option>
-            ))}
-          </select>
           <input
-            className="input col-span-2 py-2"
+            className="input py-2"
             placeholder="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -242,7 +203,6 @@ function CatalogRow({
               onSave({
                 sku: sku.trim() || null,
                 part_name: name.trim() || sku.trim(),
-                category: category || null,
               });
               setEditing(false);
             }}
@@ -267,7 +227,6 @@ function CatalogRow({
         <p className="truncate font-medium text-slate-100">{part.part_name}</p>
         <p className="text-xs text-slate-500">
           {part.sku ? <span className="font-mono">{part.sku}</span> : "no SKU"}
-          {part.category ? ` · ${part.category}` : ""}
         </p>
       </div>
       <div className="flex shrink-0 gap-3">
