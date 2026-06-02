@@ -85,28 +85,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
-/** All parts across the user's OPEN jobs — used by the inventory aggregate. */
-export async function getOpenJobParts(): Promise<Part[]> {
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("jobs")
-    .select("status, parts(*)")
-    .eq("status", "open");
-  if (error) throw new Error(error.message);
-
-  const parts: Part[] = [];
-  for (const job of (data ?? []) as any[]) {
-    for (const part of job.parts ?? []) parts.push(part as Part);
-  }
-  return parts;
-}
-
 /** A part pulled off a truck, tagged with the job date it was used on. */
 export interface UsagePart extends Part {
   job_date: string; // YYYY-MM-DD from the parent job
 }
 
-/** Every part across ALL jobs, each tagged with its job's date. Drives the
+/** Every part across ALL completed jobs, each tagged with its job's date. Drives the
  *  usage tracker (parts coming off inventory, windowed by week/month). */
 export async function getUsageParts(): Promise<UsagePart[]> {
   const supabase = createSupabaseServerClient();
