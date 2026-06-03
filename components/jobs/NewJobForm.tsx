@@ -317,22 +317,6 @@ export function NewJobForm({
               onChange={(e) => patch({ customer_name: e.target.value })}
             />
           </label>
-          <label className="col-span-1">
-            <span className="label">Technician</span>
-            <input
-              className="input"
-              value={draft.technician_name}
-              onChange={(e) => patch({ technician_name: e.target.value })}
-            />
-          </label>
-          <label className="col-span-1">
-            <span className="label">Truck ID</span>
-            <input
-              className="input"
-              value={draft.truck_id}
-              onChange={(e) => patch({ truck_id: e.target.value })}
-            />
-          </label>
           <label className="col-span-2">
             <span className="label">Job notes</span>
             <textarea
