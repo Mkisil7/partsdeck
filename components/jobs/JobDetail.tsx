@@ -426,30 +426,9 @@ export function JobDetail({
         </button>
       )}
 
-      {/* Status actions */}
-      <div className="flex flex-wrap gap-2">
-        {job.status !== "completed" && (
-          <button
-            type="button"
-            onClick={() => setStatus("completed")}
-            className="btn-ghost flex-1"
-          >
-            Mark completed
-          </button>
-        )}
-        {job.status !== "open" && (
-          <button
-            type="button"
-            onClick={() => setStatus("open")}
-            className="btn-ghost flex-1"
-          >
-            Reopen
-          </button>
-        )}
-        <button type="button" onClick={deleteJob} className="btn-danger flex-1">
-          Delete
-        </button>
-      </div>
+      <button type="button" onClick={deleteJob} className="btn-danger">
+        Delete
+      </button>
     </div>
   );
 }

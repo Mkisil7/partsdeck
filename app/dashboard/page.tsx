@@ -50,8 +50,7 @@ export default async function DashboardPage() {
         action={<SignOutButton />}
       />
 
-      <div className="mb-6 grid grid-cols-3 gap-2">
-        <StatCard label="Open Jobs" value={stats.openJobs} accent="gold" />
+      <div className="mb-6 grid grid-cols-2 gap-2">
         <StatCard
           label="Parts Transferred (mo)"
           value={stats.partsTransferredThisMonth}
