@@ -7,6 +7,7 @@ import { PartRows } from "./PartRows";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { emptyJobDraft, parsedToDraft } from "@/lib/draft";
+import type { CatalogEntry } from "@/lib/master";
 import type { JobDraft, ParsedJob } from "@/lib/types";
 
 interface Defaults {
@@ -27,7 +28,13 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
   });
 }
 
-export function NewJobForm({ defaults }: { defaults: Defaults }) {
+export function NewJobForm({
+  defaults,
+  catalog = [],
+}: {
+  defaults: Defaults;
+  catalog?: CatalogEntry[];
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -340,7 +347,11 @@ export function NewJobForm({ defaults }: { defaults: Defaults }) {
           <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
             Parts
           </h3>
-          <PartRows parts={draft.parts} onChange={(parts) => patch({ parts })} />
+          <PartRows
+            parts={draft.parts}
+            onChange={(parts) => patch({ parts })}
+            catalog={catalog}
+          />
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 // Master-catalog helpers: enrich parsed parts (fill missing SKU/name) and
 // dedupe parts within a single job. Server-side (takes a Supabase client).
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MasterPart, ParsedPart } from "./types";
+import type { MasterPart, ParsedPart, PartCategory } from "./types";
 
 const norm = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
 
@@ -42,10 +42,13 @@ export async function enrichParsedParts(
     if (!match && hasName) match = bySku.get(norm(part.part_name));
     if (!match) return part;
 
+    // A catalog match is authoritative: the SKU and name are locked to the
+    // catalog entry so e.g. "SIXCTA" always becomes its canonical name and
+    // nothing stray is left in either field.
     return {
       ...part,
-      part_number: part.part_number?.trim() || match.sku,
-      part_name: part.part_name?.trim() || match.part_name,
+      part_number: match.sku ?? part.part_number,
+      part_name: match.part_name,
       category: part.category ?? match.category,
       unit: part.unit ?? match.unit,
     };
@@ -91,4 +94,49 @@ export function partKey(p: {
 }): string {
   const sku = norm(p.part_number);
   return sku ? `sku:${sku}` : `name:${norm(p.part_name)}`;
+}
+
+// ---------------------------------------------------------------------------
+// Client-side catalog lookups (no Supabase): used by the part entry form to
+// keep SKU and name locked together as the user types.
+// ---------------------------------------------------------------------------
+
+export interface CatalogEntry {
+  sku: string | null;
+  part_name: string;
+  unit: string;
+  category: PartCategory | null;
+}
+
+export interface CatalogIndex {
+  bySku: Map<string, CatalogEntry>;
+  byName: Map<string, CatalogEntry>;
+}
+
+export function buildCatalogIndex(entries: CatalogEntry[]): CatalogIndex {
+  const bySku = new Map<string, CatalogEntry>();
+  const byName = new Map<string, CatalogEntry>();
+  for (const e of entries) {
+    if (e.sku) bySku.set(norm(e.sku), e);
+    byName.set(norm(e.part_name), e);
+  }
+  return { bySku, byName };
+}
+
+export function lookupBySku(
+  index: CatalogIndex,
+  sku: string | null | undefined,
+): CatalogEntry | undefined {
+  const key = norm(sku);
+  return key ? index.bySku.get(key) : undefined;
+}
+
+export function lookupByName(
+  index: CatalogIndex,
+  name: string | null | undefined,
+): CatalogEntry | undefined {
+  const key = norm(name);
+  if (!key) return undefined;
+  // A value typed into the name box might actually be a SKU — try both.
+  return index.byName.get(key) ?? index.bySku.get(key);
 }

@@ -1,12 +1,22 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { NewJobForm } from "@/components/jobs/NewJobForm";
-import { getUserSettings } from "@/lib/queries";
+import { getUserSettings, getMasterParts } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewJobPage() {
-  const settings = await getUserSettings();
+  const [settings, masterParts] = await Promise.all([
+    getUserSettings(),
+    getMasterParts(),
+  ]);
+
+  const catalog = masterParts.map((m) => ({
+    sku: m.sku,
+    part_name: m.part_name,
+    unit: m.unit,
+    category: m.category,
+  }));
 
   return (
     <div className="animate-fade-in">
@@ -24,6 +34,7 @@ export default async function NewJobPage() {
           technician_name: settings?.technician_name ?? null,
           truck_id: settings?.truck_id ?? null,
         }}
+        catalog={catalog}
       />
     </div>
   );
