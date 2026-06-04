@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: "PartsDeck",
   description: "Truck parts inventory tracker & warehouse transfer system",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icons/adtlogo.png",
+    apple: "/icons/adtlogo.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -16,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0f1e",
+  themeColor: "#0d47a1",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
