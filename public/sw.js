@@ -1,6 +1,6 @@
 // PartsDeck service worker — offline viewing of cached read requests.
 // Bump CACHE on any change here so old caches are purged on activate.
-const CACHE = "partsdeck-v2";
+const CACHE = "partsdeck-v3";
 const PRECACHE = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

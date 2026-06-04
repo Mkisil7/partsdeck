@@ -9,8 +9,11 @@ export const metadata: Metadata = {
   description: "Truck parts inventory tracker & warehouse transfer system",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icons/adtlogo.png",
-    apple: "/icons/adtlogo.png",
+    icon: [
+      { url: "/icons/favicon.png", sizes: "48x48", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,
