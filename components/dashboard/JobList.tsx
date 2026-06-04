@@ -88,12 +88,12 @@ export function JobList({ jobs }: { jobs: DashboardJob[] }) {
           No jobs match your filters.
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="grid gap-2 sm:grid-cols-2">
           {filtered.map((job) => (
             <li key={job.id}>
               <Link
                 href={`/jobs/${job.id}`}
-                className="card flex items-center justify-between gap-3 transition hover:border-gold/40"
+                className="card flex h-full items-center justify-between gap-3 transition hover:border-gold/40"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">

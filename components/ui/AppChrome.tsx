@@ -13,7 +13,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="mx-auto min-h-screen w-full max-w-lg px-4 pt-4 pb-28">
+      <div className="mx-auto min-h-screen w-full max-w-lg px-4 pt-4 pb-28 sm:px-6 md:max-w-3xl md:pt-6 lg:max-w-4xl">
         {children}
       </div>
       <BottomNav />
