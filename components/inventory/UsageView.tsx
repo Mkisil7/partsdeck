@@ -156,7 +156,7 @@ export function UsageView({ parts }: { parts: UsagePart[] }) {
                   {group.units} used
                 </span>
               </div>
-              <ul className="grid gap-2 sm:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.items.map((item) => (
                   <li
                     key={item.key}

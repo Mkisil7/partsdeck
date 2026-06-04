@@ -49,7 +49,7 @@ export function JobList({ jobs }: { jobs: DashboardJob[] }) {
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="flex items-center gap-2">
-          <label className="flex-1">
+          <label className="min-w-0 flex-1">
             <span className="mb-1 block text-xs text-slate-500">From</span>
             <input
               type="date"
@@ -58,7 +58,7 @@ export function JobList({ jobs }: { jobs: DashboardJob[] }) {
               onChange={(e) => setFrom(e.target.value)}
             />
           </label>
-          <label className="flex-1">
+          <label className="min-w-0 flex-1">
             <span className="mb-1 block text-xs text-slate-500">To</span>
             <input
               type="date"
@@ -88,7 +88,7 @@ export function JobList({ jobs }: { jobs: DashboardJob[] }) {
           No jobs match your filters.
         </div>
       ) : (
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {filtered.map((job) => (
             <li key={job.id}>
               <Link

@@ -361,7 +361,7 @@ export function JobDetail({
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
           Parts ({parts.length})
         </h2>
-        <ul className="grid items-start gap-2 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2">
           {parts.map((part) => (
             <EditablePart
               key={part.id}

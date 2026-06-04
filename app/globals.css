@@ -16,6 +16,8 @@ body {
 body {
   /* Leave room for the fixed bottom nav. */
   padding-bottom: env(safe-area-inset-bottom);
+  /* Belt-and-suspenders against accidental horizontal scroll on mobile. */
+  overflow-x: hidden;
 }
 
 @layer components {
