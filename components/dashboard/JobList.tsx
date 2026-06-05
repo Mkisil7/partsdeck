@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { formatDate } from "@/lib/utils";
 import type { JobStatus } from "@/lib/types";
 
@@ -100,7 +99,6 @@ export function JobList({ jobs }: { jobs: DashboardJob[] }) {
                     <span className="font-semibold text-slate-100">
                       #{job.job_number}
                     </span>
-                    <StatusBadge status={job.status} />
                   </div>
                   <p className="truncate text-sm text-slate-300">
                     {job.customer_name}
