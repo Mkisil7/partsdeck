@@ -76,6 +76,19 @@ export interface IgnoredItem {
   created_at: string;
 }
 
+// A per-user minimum stock level. When on-hand drops below min_quantity the
+// part is flagged as low stock.
+export interface PartMinLevel {
+  id: string;
+  user_id: string;
+  part_key: string;
+  sku: string | null;
+  part_name: string;
+  min_quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // A line item inside a transfer or an inventory receipt.
 export interface LineItem {
   part_number: string | null;

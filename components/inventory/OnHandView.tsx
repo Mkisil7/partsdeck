@@ -9,7 +9,9 @@ import {
   partMatchKey,
   type Bucket,
 } from "@/lib/buckets";
+import { minLevelMap } from "@/lib/lowstock";
 import type { UsagePart, ReceivedPart } from "@/lib/queries";
+import type { PartMinLevel } from "@/lib/types";
 
 interface Row {
   key: string;
@@ -24,13 +26,17 @@ interface Row {
 export function OnHandView({
   used,
   received,
+  minLevels,
 }: {
   used: UsagePart[];
   received: ReceivedPart[];
+  minLevels: PartMinLevel[];
 }) {
   const [spotCheck, setSpotCheck] = useState(false);
   // Physical counts entered during a spot check, keyed by row key.
   const [counts, setCounts] = useState<Record<string, string>>({});
+
+  const mins = useMemo(() => minLevelMap(minLevels), [minLevels]);
 
   const rows = useMemo(() => {
     const map = new Map<string, Row>();
@@ -73,6 +79,18 @@ export function OnHandView({
       .sort((a, b) => b.received - b.used - (a.received - a.used)),
   })).filter((g) => g.items.length > 0);
 
+  // Parts at or below the user-set minimum (only ones with a threshold set).
+  const lowItems = rows
+    .filter((r) => {
+      const min = mins.get(r.key);
+      return min != null && Math.max(0, r.received - r.used) <= min;
+    })
+    .sort(
+      (a, b) =>
+        Math.max(0, a.received - a.used) - (mins.get(a.key) ?? 0) -
+        (Math.max(0, b.received - b.used) - (mins.get(b.key) ?? 0)),
+    );
+
   return (
     <div>
       <div className="mb-4 grid grid-cols-3 gap-2">
@@ -94,6 +112,28 @@ export function OnHandView({
         {spotCheck ? "Done spot checking" : "Start spot check"}
       </button>
 
+      {lowItems.length > 0 && (
+        <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+          <p className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <WarnIcon className="h-4 w-4" />
+            {lowItems.length} part{lowItems.length === 1 ? "" : "s"} low on stock
+          </p>
+          <ul className="mt-2 space-y-1">
+            {lowItems.map((r) => (
+              <li
+                key={r.key}
+                className="flex items-center justify-between gap-2 text-xs text-amber-200/90"
+              >
+                <span className="truncate">{r.part_name}</span>
+                <span className="shrink-0 font-semibold tabular-nums">
+                  {Math.max(0, r.received - r.used)} / {mins.get(r.key)} min
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="card text-center text-sm text-slate-400">
           No inventory yet. Tap “Receive Inventory” on the dashboard to log a pickup.
@@ -108,6 +148,8 @@ export function OnHandView({
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.items.map((item) => {
                   const onHand = Math.max(0, item.received - item.used);
+                  const min = mins.get(item.key);
+                  const low = min != null && onHand <= min;
                   const raw = counts[item.key];
                   const actual = raw === "" || raw === undefined ? null : parseInt(raw, 10);
                   const diff = actual == null ? null : actual - onHand;
@@ -116,14 +158,22 @@ export function OnHandView({
                       key={item.key}
                       className={cn(
                         "card py-3",
+                        low && "border-amber-500/50 bg-amber-500/5",
                         diff != null && diff !== 0 && "border-red-500/50 bg-red-500/5",
                       )}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate font-medium text-slate-100">
-                            {item.part_name}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="truncate font-medium text-slate-100">
+                              {item.part_name}
+                            </p>
+                            {low && (
+                              <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                                LOW
+                              </span>
+                            )}
+                          </div>
                           {item.part_number && (
                             <p className="font-mono text-xs text-slate-500">
                               {item.part_number}
@@ -147,6 +197,11 @@ export function OnHandView({
                       <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
                         <span>+{item.received} received</span>
                         <span>−{item.used} used</span>
+                        {min != null && (
+                          <span className={cn(low && "text-amber-300")}>
+                            min {min}
+                          </span>
+                        )}
                       </div>
 
                       {spotCheck && (
@@ -215,5 +270,15 @@ function Stat({
       </span>
       <span className="block text-xs text-slate-400">{label}</span>
     </div>
+  );
+}
+
+function WarnIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
   );
 }

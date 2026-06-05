@@ -10,6 +10,7 @@ import type {
   LineItem,
   MasterPart,
   Part,
+  PartMinLevel,
   Transfer,
   UserSettings,
 } from "./types";
@@ -161,6 +162,16 @@ export async function getMasterParts(): Promise<MasterPart[]> {
     .order("part_name", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as MasterPart[];
+}
+
+export async function getPartMinLevels(): Promise<PartMinLevel[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("part_min_levels")
+    .select("*")
+    .order("part_name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PartMinLevel[];
 }
 
 export async function getIgnoredItems(): Promise<IgnoredItem[]> {

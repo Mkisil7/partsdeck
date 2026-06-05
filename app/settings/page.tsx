@@ -2,12 +2,24 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SignOutButton } from "@/components/ui/SignOutButton";
 import { SettingsForm } from "@/components/settings/SettingsForm";
-import { getUserSettings } from "@/lib/queries";
+import { MinLevelsManager } from "@/components/settings/MinLevelsManager";
+import { getMasterParts, getPartMinLevels, getUserSettings } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const settings = await getUserSettings();
+  const [settings, masterParts, minLevels] = await Promise.all([
+    getUserSettings(),
+    getMasterParts(),
+    getPartMinLevels(),
+  ]);
+
+  const catalog = masterParts.map((m) => ({
+    sku: m.sku,
+    part_name: m.part_name,
+    unit: m.unit,
+    category: m.category,
+  }));
 
   return (
     <div className="animate-fade-in">
@@ -20,6 +32,8 @@ export default async function SettingsPage() {
           truck_id: settings?.truck_id ?? "",
         }}
       />
+
+      <MinLevelsManager catalog={catalog} initial={minLevels} />
 
       <Link
         href="/catalog"

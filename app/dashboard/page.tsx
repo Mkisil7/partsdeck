@@ -3,18 +3,31 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { JobList, type DashboardJob } from "@/components/dashboard/JobList";
 import { SignOutButton } from "@/components/ui/SignOutButton";
 import { createSupabaseServerClient } from "@/lib/supabase";
+import {
+  getUsageParts,
+  getReceivedParts,
+  getPartMinLevels,
+} from "@/lib/queries";
+import { computeLowStock } from "@/lib/lowstock";
 import type { JobStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient();
-  const jobsRes = await supabase
-    .from("jobs")
-    .select(
-      "id, job_number, customer_name, job_date, status, technician_name, truck_id, parts(part_name, part_number)",
-    )
-    .order("created_at", { ascending: false });
+  const [jobsRes, used, received, minLevels] = await Promise.all([
+    supabase
+      .from("jobs")
+      .select(
+        "id, job_number, customer_name, job_date, status, technician_name, truck_id, parts(part_name, part_number)",
+      )
+      .order("created_at", { ascending: false }),
+    getUsageParts(),
+    getReceivedParts(),
+    getPartMinLevels(),
+  ]);
+
+  const lowStock = computeLowStock(received, used, minLevels);
 
   const jobs: DashboardJob[] = ((jobsRes.data ?? []) as any[]).map((row) => {
     const parts = (row.parts ?? []) as Array<{
@@ -45,6 +58,28 @@ export default async function DashboardPage() {
         subtitle="Your jobs at a glance"
         action={<SignOutButton />}
       />
+
+      {lowStock.length > 0 && (
+        <Link
+          href="/inventory"
+          className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 transition hover:border-amber-500/70"
+        >
+          <WarnIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-amber-300">
+              {lowStock.length} part{lowStock.length === 1 ? "" : "s"} low on stock
+            </p>
+            <p className="truncate text-xs text-amber-200/80">
+              {lowStock
+                .slice(0, 3)
+                .map((l) => `${l.part_name} (${l.onHand}/${l.min})`)
+                .join(", ")}
+              {lowStock.length > 3 ? "…" : ""}
+            </p>
+          </div>
+          <span className="ml-auto shrink-0 self-center text-amber-300">›</span>
+        </Link>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3">
         <Link
@@ -77,6 +112,15 @@ export default async function DashboardPage() {
   );
 }
 
+function WarnIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
 function TransferIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
