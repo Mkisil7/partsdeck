@@ -4,12 +4,14 @@ export type Bucket = "google" | "v5" | "command" | "doorlock" | "other";
 export function getBucket(sku: string | null): Bucket {
   const s = (sku || "").toLowerCase().trim();
   if (s.startsWith("ga")) return "google";
-  if (s.startsWith("s")) return "v5";
-  if (s === "adtplus-ys-r0-29") return "v5";
   if (s.startsWith("yrd")) return "doorlock";
+  // Command checks run before the generic "s" → v5 rule so SKUs like "six..."
+  // aren't swallowed by the V5 prefix.
   if (s.startsWith("six") || s.startsWith("aio") || s.startsWith("wts"))
     return "command";
-  if (s.startsWith("adt") && s !== "adtplus-ys-r0-29") return "command";
+  if (s === "adtplus-ys-r0-29") return "v5";
+  if (s.startsWith("adt")) return "command";
+  if (s.startsWith("s")) return "v5";
   return "other";
 }
 
