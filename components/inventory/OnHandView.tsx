@@ -107,7 +107,7 @@ export function OnHandView({
               </h2>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.items.map((item) => {
-                  const onHand = item.received - item.used;
+                  const onHand = Math.max(0, item.received - item.used);
                   const raw = counts[item.key];
                   const actual = raw === "" || raw === undefined ? null : parseInt(raw, 10);
                   const diff = actual == null ? null : actual - onHand;
