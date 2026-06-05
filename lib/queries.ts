@@ -3,11 +3,14 @@
 import { createSupabaseServerClient } from "./supabase";
 import type {
   IgnoredItem,
+  InventoryReceipt,
   Job,
   JobWithParts,
   JobWithPartsCount,
+  LineItem,
   MasterPart,
   Part,
+  Transfer,
   UserSettings,
 } from "./types";
 
@@ -106,6 +109,48 @@ export async function getUsageParts(): Promise<UsagePart[]> {
     }
   }
   return out;
+}
+
+/** A received line item, tagged with the date it was received. */
+export interface ReceivedPart extends LineItem {
+  received_date: string;
+}
+
+/** Every received line item across all inventory receipts (additive ledger). */
+export async function getReceivedParts(): Promise<ReceivedPart[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("inventory_receipts")
+    .select("received_date, items");
+  if (error) throw new Error(error.message);
+
+  const out: ReceivedPart[] = [];
+  for (const receipt of (data ?? []) as any[]) {
+    for (const item of (receipt.items ?? []) as LineItem[]) {
+      out.push({ ...item, received_date: receipt.received_date });
+    }
+  }
+  return out;
+}
+
+export async function getInventoryReceipts(): Promise<InventoryReceipt[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("inventory_receipts")
+    .select("*")
+    .order("received_date", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as InventoryReceipt[];
+}
+
+export async function getTransfers(): Promise<Transfer[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("transfers")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as Transfer[];
 }
 
 export async function getMasterParts(): Promise<MasterPart[]> {

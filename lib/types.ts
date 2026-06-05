@@ -76,6 +76,33 @@ export interface IgnoredItem {
   created_at: string;
 }
 
+// A line item inside a transfer or an inventory receipt.
+export interface LineItem {
+  part_number: string | null;
+  part_name: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface Transfer {
+  id: string;
+  user_id: string;
+  recipient_name: string;
+  recipient_email: string | null;
+  message: string | null;
+  items: LineItem[];
+  created_at: string;
+}
+
+export interface InventoryReceipt {
+  id: string;
+  user_id: string;
+  received_date: string; // YYYY-MM-DD
+  image_url: string | null;
+  items: LineItem[];
+  created_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Composite / view types
 // ---------------------------------------------------------------------------

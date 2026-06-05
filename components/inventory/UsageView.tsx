@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import type { UsagePart } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { getBucket, BUCKET_ORDER, BUCKET_LABELS, type Bucket } from "@/lib/buckets";
 
-type Bucket = "google" | "v5" | "command" | "doorlock" | "other";
 type Window = "week" | "month" | "all";
 
 interface AggregatedPart {
@@ -16,26 +16,6 @@ interface AggregatedPart {
   totalQuantity: number;
   occurrences: number;
 }
-
-function getBucket(sku: string | null): Bucket {
-  const s = (sku || "").toLowerCase().trim();
-  if (s.startsWith("ga")) return "google";
-  if (s.startsWith("s")) return "v5";
-  if (s === "adtplus-ys-r0-29") return "v5";
-  if (s.startsWith("yrd")) return "doorlock";
-  if (s.startsWith("six") || s.startsWith("aio") || s.startsWith("wts")) return "command";
-  if (s.startsWith("adt") && s !== "adtplus-ys-r0-29") return "command";
-  return "other";
-}
-
-const BUCKET_ORDER: Bucket[] = ["google", "v5", "command", "doorlock", "other"];
-const BUCKET_LABELS: Record<Bucket, string> = {
-  google: "Google",
-  v5: "V5",
-  command: "Command",
-  doorlock: "Doorlock",
-  other: "Other",
-};
 
 /** Most recent Tuesday at local midnight (start of the work week). */
 function startOfWeek(now: Date): Date {

@@ -1,19 +1,22 @@
 import { PageHeader } from "@/components/ui/PageHeader";
-import { UsageView } from "@/components/inventory/UsageView";
-import { getUsageParts } from "@/lib/queries";
+import { InventoryTabs } from "@/components/inventory/InventoryTabs";
+import { getUsageParts, getReceivedParts } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const parts = await getUsageParts();
+  const [used, received] = await Promise.all([
+    getUsageParts(),
+    getReceivedParts(),
+  ]);
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Inventory"
-        subtitle="Parts pulled off your trucks"
+        subtitle="Live count, received vs. used"
       />
-      <UsageView parts={parts} />
+      <InventoryTabs used={used} received={received} />
     </div>
   );
 }
