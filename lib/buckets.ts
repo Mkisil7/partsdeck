@@ -7,7 +7,13 @@ export function getBucket(sku: string | null): Bucket {
   if (s.startsWith("yrd")) return "doorlock";
   // Command checks run before the generic "s" → v5 rule so SKUs like "six..."
   // aren't swallowed by the V5 prefix.
-  if (s.startsWith("six") || s.startsWith("aio") || s.startsWith("wts"))
+  if (
+    s.startsWith("six") ||
+    s.startsWith("aio") ||
+    s.startsWith("wts") ||
+    s.startsWith("oc") ||
+    s.startsWith("rc")
+  )
     return "command";
   if (s === "adtplus-ys-r0-29") return "v5";
   if (s.startsWith("adt")) return "command";
