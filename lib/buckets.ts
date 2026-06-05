@@ -11,7 +11,8 @@ export function getBucket(sku: string | null): Bucket {
     return "command";
   if (s === "adtplus-ys-r0-29") return "v5";
   if (s.startsWith("adt")) return "command";
-  if (s.startsWith("s")) return "v5";
+  // V5 SKUs start with "ss" or "sts".
+  if (s.startsWith("ss") || s.startsWith("sts")) return "v5";
   return "other";
 }
 
