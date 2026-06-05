@@ -43,6 +43,26 @@ export async function POST(request: Request) {
 
   const { supabase, userId } = ctx;
 
+  // Check for duplicate job number
+  const { data: existing } = await supabase
+    .from("jobs")
+    .select("id, job_number, customer_name, job_date, parts(part_name, part_number, quantity, unit)")
+    .eq("job_number", draft.job_number.trim())
+    .limit(1)
+    .single();
+
+  if (existing) {
+    // Return the duplicate as a conflict so the form can show a modal
+    return NextResponse.json(
+      {
+        error: "DUPLICATE_JOB_NUMBER",
+        duplicate: existing,
+        message: `Job #${draft.job_number} already exists`,
+      },
+      { status: 409 },
+    );
+  }
+
   const { data: job, error: jobError } = await supabase
     .from("jobs")
     .insert({

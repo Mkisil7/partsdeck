@@ -46,6 +46,7 @@ export function NewJobForm({
 
   const [busy, setBusy] = useState<null | "image" | "speech" | "save">(null);
   const [showSpeech, setShowSpeech] = useState(false);
+  const [duplicateJob, setDuplicateJob] = useState<any | null>(null);
 
   const speech = useSpeechRecognition();
 
@@ -139,6 +140,14 @@ export function NewJobForm({
         body: JSON.stringify({ draft, image_url: imageUrl, parsed_data: parsedData }),
       });
       const json = await res.json();
+
+      // Handle duplicate job number
+      if (res.status === 409 && json.error === "DUPLICATE_JOB_NUMBER") {
+        setBusy(null);
+        setDuplicateJob(json.duplicate);
+        return;
+      }
+
       if (!res.ok) throw new Error(json.error || "Save failed");
       toast("Job saved", "success");
       router.push(`/jobs/${json.id}`);
@@ -285,8 +294,56 @@ export function NewJobForm({
         </div>
       )}
 
+      {/* Duplicate job warning */}
+      {duplicateJob && (
+        <div className="card space-y-3 border-orange-500/40 bg-orange-500/10 animate-fade-in">
+          <h3 className="font-semibold text-orange-300">
+            Job #{duplicateJob.job_number} already exists
+          </h3>
+          <div className="space-y-2 text-sm">
+            <p>
+              <span className="font-medium">{duplicateJob.customer_name}</span> on{" "}
+              {new Date(duplicateJob.job_date).toLocaleDateString()}
+            </p>
+            {duplicateJob.parts?.length > 0 && (
+              <div>
+                <p className="text-slate-400 mb-1">
+                  {duplicateJob.parts.length} part{duplicateJob.parts.length === 1 ? "" : "s"}{" "}
+                  already on this job:
+                </p>
+                <ul className="text-xs text-slate-300 space-y-0.5 ml-2">
+                  {duplicateJob.parts.map((p: any) => (
+                    <li key={`${p.part_number}-${p.part_name}`}>
+                      {p.quantity} {p.unit} • {p.part_name}
+                      {p.part_number && ` (${p.part_number})`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => router.push(`/jobs/${duplicateJob.id}`)}
+              className="btn-gold flex-1 text-sm"
+            >
+              Go to existing job
+            </button>
+            <button
+              type="button"
+              onClick={() => setDuplicateJob(null)}
+              className="btn-ghost flex-1 text-sm"
+            >
+              Use different #
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Review / confirmation form */}
-      <div className="space-y-4">
+      {!duplicateJob && (
+        <div className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
           Review &amp; confirm
         </h2>
@@ -338,6 +395,7 @@ export function NewJobForm({
           />
         </div>
       </div>
+      )}
 
       <div className="sticky bottom-24 z-10">
         <button
