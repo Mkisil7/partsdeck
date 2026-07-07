@@ -7,7 +7,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 export default function LoginPage() {
   const router = useRouter();
   const params = useSearchParams();
-  const redirectTo = params.get("redirect") || "/dashboard";
+  // Only allow same-site paths — a full URL or protocol-relative "//host"
+  // here would let a crafted link bounce users to another site after login.
+  const rawRedirect = params.get("redirect") || "";
+  const redirectTo =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
+      ? rawRedirect
+      : "/dashboard";
 
   const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
   const [email, setEmail] = useState("");
