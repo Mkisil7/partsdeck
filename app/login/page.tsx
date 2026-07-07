@@ -9,7 +9,7 @@ export default function LoginPage() {
   const params = useSearchParams();
   const redirectTo = params.get("redirect") || "/dashboard";
 
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -34,6 +34,19 @@ export default function LoginPage() {
     }
 
     const supabase = createSupabaseBrowserClient();
+
+    if (mode === "reset") {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) setError(error.message);
+      else
+        setMessage(
+          "If that account exists, a reset link is on its way. Check your email.",
+        );
+      setLoading(false);
+      return;
+    }
 
     if (mode === "signup") {
       const { error } = await supabase.auth.signUp({ email, password });
@@ -87,28 +100,50 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div>
-          <label className="label" htmlFor="password">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            required
-            minLength={6}
-            className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
+        {mode !== "reset" && (
+          <div>
+            <label className="label" htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              required
+              minLength={6}
+              className="input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+        )}
 
         {error && <p className="text-sm text-red-300">{error}</p>}
         {message && <p className="text-sm text-green-300">{message}</p>}
 
         <button type="submit" className="btn-gold w-full" disabled={loading}>
-          {loading ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
+          {loading
+            ? "Please wait…"
+            : mode === "signin"
+              ? "Sign In"
+              : mode === "signup"
+                ? "Create Account"
+                : "Send Reset Link"}
         </button>
+
+        {mode === "signin" && (
+          <button
+            type="button"
+            className="w-full text-center text-sm text-slate-400 hover:text-gold-400"
+            onClick={() => {
+              setMode("reset");
+              setError(null);
+              setMessage(null);
+            }}
+          >
+            Forgot password?
+          </button>
+        )}
 
         <button
           type="button"
@@ -121,7 +156,9 @@ export default function LoginPage() {
         >
           {mode === "signin"
             ? "Need an account? Sign up"
-            : "Already have an account? Sign in"}
+            : mode === "signup"
+              ? "Already have an account? Sign in"
+              : "Back to sign in"}
         </button>
       </form>
     </main>
