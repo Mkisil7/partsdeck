@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { PartRows } from "./PartRows";
-import { useSpeechRecognition } from "./useSpeechRecognition";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { emptyJobDraft, parsedToDraft } from "@/lib/draft";
 import type { CatalogEntry } from "@/lib/master";
@@ -44,11 +43,10 @@ export function NewJobForm({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ParsedJob | null>(null);
 
-  const [busy, setBusy] = useState<null | "image" | "speech" | "save">(null);
-  const [showSpeech, setShowSpeech] = useState(false);
+  const [busy, setBusy] = useState<null | "image" | "paste" | "save">(null);
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
   const [duplicateJob, setDuplicateJob] = useState<any | null>(null);
-
-  const speech = useSpeechRecognition();
 
   function patch(p: Partial<JobDraft>) {
     setDraft((d) => ({ ...d, ...p }));
@@ -72,8 +70,8 @@ export function NewJobForm({
           .from("job-images")
           .upload(path, file, { upsert: false, contentType: file.type });
         if (!upErr) {
-          const { data } = supabase.storage.from("job-images").getPublicUrl(path);
-          setImageUrl(data.publicUrl);
+          // Bucket is private — store the path; views generate signed URLs.
+          setImageUrl(path);
         } else {
           toast("Image upload failed, parsing anyway", "info");
         }
@@ -99,29 +97,29 @@ export function NewJobForm({
     }
   }
 
-  // -- Speech flow ---------------------------------------------------------
-  async function parseTranscript() {
-    const transcript = speech.transcript.trim();
-    if (!transcript) {
-      toast("Nothing was recorded", "error");
+  // -- Paste flow ----------------------------------------------------------
+  async function parsePasted() {
+    const text = pasteText.trim();
+    if (!text) {
+      toast("Paste the ticket text first", "error");
       return;
     }
-    setBusy("speech");
+    setBusy("paste");
     try {
       const res = await fetch("/api/parse-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript }),
+        body: JSON.stringify({ transcript: text }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Parse failed");
       const parsed = json.parsed as ParsedJob;
       setParsedData(parsed);
       setDraft(parsedToDraft(parsed, defaults));
-      setShowSpeech(false);
+      setShowPaste(false);
       toast("Parsed — review below", "success");
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not parse speech", "error");
+      toast(err instanceof Error ? err.message : "Could not parse text", "error");
     } finally {
       setBusy(null);
     }
@@ -197,14 +195,14 @@ export function NewJobForm({
         <button
           type="button"
           onClick={() => {
-            setShowSpeech(true);
-            speech.reset();
+            setShowPaste(true);
+            setPasteText("");
           }}
           disabled={busy !== null}
           className="flex flex-col items-center justify-center gap-2 rounded-lg border border-gold/50 bg-navy-700/60 py-6 font-semibold text-gold-400 transition active:scale-[0.98] disabled:opacity-60"
         >
-          <MicIcon className="h-9 w-9" />
-          Speak It
+          <PasteIcon className="h-9 w-9" />
+          Paste It
         </button>
         <p className="col-span-2 text-center text-xs text-slate-400">
           or drop a photo here
@@ -234,63 +232,44 @@ export function NewJobForm({
         </div>
       )}
 
-      {/* Speech panel */}
-      {showSpeech && (
+      {/* Paste panel */}
+      {showPaste && (
         <div className="card space-y-3 animate-fade-in">
-          {!speech.supported ? (
-            <p className="text-sm text-red-300">
-              Speech recognition isn’t supported in this browser. Try Chrome, or
-              type into the form below.
+          <div>
+            <span className="text-sm font-semibold text-slate-200">
+              Paste the ticket text
+            </span>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Customer, ticket #, and the parts list — straight from the ticket.
+              Claude pulls out the job number and every part with its quantity.
             </p>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-200">
-                  {speech.listening ? "Listening…" : "Tap to record"}
-                </span>
-                <button
-                  type="button"
-                  onClick={speech.listening ? speech.stop : speech.start}
-                  className={
-                    speech.listening
-                      ? "rounded-full bg-red-500/20 px-4 py-2 text-sm font-semibold text-red-300"
-                      : "rounded-full bg-gold px-4 py-2 text-sm font-semibold text-navy"
-                  }
-                >
-                  {speech.listening ? "Stop" : "Record"}
-                </button>
-              </div>
-              <textarea
-                className="input min-h-[80px]"
-                placeholder='e.g. "Job 1042, Mike Johnson, June 1st, 3 brake pads, 1 rotor, 2 quarts oil"'
-                value={speech.transcript}
-                onChange={() => {
-                  /* transcript is driven by recognition; editing handled below */
-                }}
-                readOnly
-              />
-              {speech.error && (
-                <p className="text-xs text-red-300">{speech.error}</p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={parseTranscript}
-                  disabled={busy === "speech" || !speech.transcript.trim()}
-                  className="btn-gold flex-1"
-                >
-                  {busy === "speech" ? "Parsing…" : "Parse"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSpeech(false)}
-                  className="btn-ghost"
-                >
-                  Cancel
-                </button>
-              </div>
-            </>
-          )}
+          </div>
+          <textarea
+            className="input min-h-[180px] font-mono text-xs"
+            placeholder={
+              "COOPER, EDDIE\nTicket #: 135212295 Customer #: 500839198\n\nParts\n\nGA01318-US:$179.99\nGoogle Nest Doorbell (Snow, US)\n1 @ $179.99\n…"
+            }
+            value={pasteText}
+            onChange={(e) => setPasteText(e.target.value)}
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={parsePasted}
+              disabled={busy === "paste" || !pasteText.trim()}
+              className="btn-gold flex-1"
+            >
+              {busy === "paste" ? "Parsing…" : "Parse"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPaste(false)}
+              className="btn-ghost"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -419,12 +398,13 @@ function CameraIcon({ className }: { className?: string }) {
     </svg>
   );
 }
-function MicIcon({ className }: { className?: string }) {
+function PasteIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="2" width="6" height="12" rx="3" />
-      <path d="M5 10a7 7 0 0 0 14 0" />
-      <path d="M12 19v3" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="M9 12h6" />
+      <path d="M9 16h6" />
     </svg>
   );
 }

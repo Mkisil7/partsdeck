@@ -35,6 +35,14 @@ pads", "alternator"), or both. You must decide which is which:
   inferred). "part_name" must never be null.
 - If only a name is given, leave "part_number" null.
 
+Some tickets list parts as blocks like:
+  GA01318-US:$179.99
+  Google Nest Doorbell (Snow, US)
+  1 @ $179.99
+There, "GA01318-US" is the SKU (strip the ":$price" suffix), the next line is
+the part name, and "N @ $unit-price" means quantity N. Ignore all dollar
+amounts and totals — never treat a price as a quantity or part.
+
 Also infer a "category" for each part, one of exactly:
 electrical, mechanical, hardware, fluids, other.
 
@@ -157,7 +165,7 @@ export async function parseImage(
   return normalizeParsedJob(extractJson(textFromResponse(message)));
 }
 
-/** Parse spoken/typed free text into the same structured job shape. */
+/** Parse pasted/typed job text into the same structured job shape. */
 export async function parseSpeech(transcript: string): Promise<ParsedJob> {
   const message = await getClient().messages.create({
     model: PARSE_MODEL,
@@ -166,7 +174,7 @@ export async function parseSpeech(transcript: string): Promise<ParsedJob> {
     messages: [
       {
         role: "user",
-        content: `Parse this spoken job description into the JSON schema:\n\n"${transcript}"`,
+        content: `Parse this job ticket text into the JSON schema:\n\n"${transcript}"`,
       },
     ],
   });

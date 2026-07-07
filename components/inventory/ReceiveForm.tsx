@@ -55,10 +55,8 @@ export function ReceiveForm({
         const { error: upErr } = await supabase.storage
           .from("job-images")
           .upload(path, file, { upsert: false, contentType: file.type });
-        if (!upErr) {
-          const { data } = supabase.storage.from("job-images").getPublicUrl(path);
-          setImageUrl(data.publicUrl);
-        }
+        // Bucket is private — store the path; views generate signed URLs.
+        if (!upErr) setImageUrl(path);
       }
 
       const { base64, mediaType } = await fileToBase64(file);

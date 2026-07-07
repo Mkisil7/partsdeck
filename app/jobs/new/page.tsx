@@ -22,7 +22,7 @@ export default async function NewJobPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="New Job"
-        subtitle="Snap a sheet, speak it, or type it in"
+        subtitle="Snap a sheet, paste it, or type it in"
         action={
           <Link href="/dashboard" className="text-sm text-slate-400 hover:text-gold-400">
             Cancel
