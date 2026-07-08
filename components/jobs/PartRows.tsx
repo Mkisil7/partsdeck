@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { PartDraft } from "@/lib/types";
 import { emptyPartDraft } from "@/lib/draft";
+import { redlineFor, type BaselineEntry } from "@/lib/redline";
 import {
   buildCatalogIndex,
   lookupBySku,
@@ -14,10 +15,13 @@ export function PartRows({
   parts,
   onChange,
   catalog = [],
+  baseline,
 }: {
   parts: PartDraft[];
   onChange: (parts: PartDraft[]) => void;
   catalog?: CatalogEntry[];
+  /** Original ticket contents — rows that differ get redlined. */
+  baseline?: Map<string, BaselineEntry>;
 }) {
   const index = useMemo(() => buildCatalogIndex(catalog), [catalog]);
 
@@ -70,12 +74,37 @@ export function PartRows({
         // and read-only — nothing stray can be left in the name box.
         const skuMatch = lookupBySku(index, part.part_number);
         const nameLocked = !!skuMatch;
+        const redline = baseline
+          ? redlineFor(
+              baseline,
+              part.part_number || null,
+              part.part_name,
+              parseInt(part.quantity, 10) || 1,
+            )
+          : null;
 
         return (
-          <div key={i} className="rounded-xl border border-navy-600 bg-navy-700/40 p-3">
+          <div
+            key={i}
+            className={
+              redline
+                ? "rounded-xl border border-red-500/40 bg-red-500/5 p-3"
+                : "rounded-xl border border-navy-600 bg-navy-700/40 p-3"
+            }
+          >
             <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-400">
+              <span className="flex items-center gap-2 text-xs font-semibold text-slate-400">
                 Part {i + 1}
+                {redline?.status === "added" && (
+                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                    NOT ON TICKET
+                  </span>
+                )}
+                {redline?.status === "qty" && (
+                  <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                    TICKET: {redline.was}
+                  </span>
+                )}
               </span>
               <button
                 type="button"

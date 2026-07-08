@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EditablePart } from "./EditablePart";
 import { AddPartForm, type NewPartInput } from "./AddPartForm";
 import { formatDate } from "@/lib/utils";
+import { partMatchKey } from "@/lib/buckets";
+import {
+  baselineFromParsed,
+  redlineFor,
+  removedFromBaseline,
+} from "@/lib/redline";
 import type { JobStatus, JobWithParts, Part } from "@/lib/types";
 
 export function JobDetail({
@@ -25,6 +31,20 @@ export function JobDetail({
   const [warehouseEmail, setWarehouseEmail] = useState(defaultWarehouseEmail);
   const [sending, setSending] = useState(false);
   const [busyPart, setBusyPart] = useState(false);
+
+  // Redline: diff the live parts against what the uploaded ticket said.
+  const baseline = useMemo(
+    () => baselineFromParsed(initialJob.parsed_data),
+    [initialJob.parsed_data],
+  );
+  const removedParts = useMemo(
+    () =>
+      removedFromBaseline(
+        baseline,
+        parts.map((p) => partMatchKey(p.part_number, p.part_name)),
+      ),
+    [baseline, parts],
+  );
 
   // Header edit
   const [editingHeader, setEditingHeader] = useState(false);
@@ -370,12 +390,47 @@ export function JobDetail({
               onQuantity={(next) => changeQuantity(part, next)}
               onSave={(patch) => savePart(part, patch)}
               onDelete={() => deletePart(part)}
+              redline={redlineFor(
+                baseline,
+                part.part_number,
+                part.part_name,
+                part.quantity,
+              )}
             />
           ))}
-          {parts.length === 0 && (
+          {removedParts.map((r) => (
+            <li
+              key={`removed-${r.key}`}
+              className="card flex items-center justify-between gap-3 border-red-500/40 bg-red-500/5 py-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-slate-400 line-through">
+                  {r.part_name}
+                </p>
+                {r.part_number && (
+                  <p className="font-mono text-xs text-slate-500 line-through">
+                    {r.part_number}
+                  </p>
+                )}
+              </div>
+              <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                REMOVED · TICKET: {r.quantity}
+              </span>
+            </li>
+          ))}
+          {parts.length === 0 && removedParts.length === 0 && (
             <li className="card text-sm text-slate-400 sm:col-span-2">No parts on this job yet.</li>
           )}
         </ul>
+        {baseline.size > 0 &&
+          (removedParts.length > 0 ||
+            parts.some((p) =>
+              redlineFor(baseline, p.part_number, p.part_name, p.quantity),
+            )) && (
+            <p className="mt-2 text-xs text-red-300/80">
+              Red items differ from the uploaded ticket.
+            </p>
+          )}
         <div className="mt-2">
           <AddPartForm busy={busyPart} onAdd={addPart} />
         </div>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PART_CATEGORIES, type Part, type PartCategory } from "@/lib/types";
+import type { Redline } from "@/lib/redline";
 
 export function EditablePart({
   part,
@@ -9,12 +10,14 @@ export function EditablePart({
   onSave,
   onDelete,
   onQuantity,
+  redline = null,
 }: {
   part: Part;
   busy: boolean;
   onSave: (patch: Partial<Part>) => void;
   onDelete: () => void;
   onQuantity: (next: number) => void;
+  redline?: Redline;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -120,9 +123,27 @@ export function EditablePart({
   }
 
   return (
-    <li className="card flex items-center justify-between gap-3 py-3">
+    <li
+      className={
+        redline
+          ? "card flex items-center justify-between gap-3 border-red-500/40 bg-red-500/5 py-3"
+          : "card flex items-center justify-between gap-3 py-3"
+      }
+    >
       <div className="min-w-0">
-        <p className="truncate font-medium text-slate-100">{part.part_name}</p>
+        <div className="flex items-center gap-2">
+          <p className="truncate font-medium text-slate-100">{part.part_name}</p>
+          {redline?.status === "added" && (
+            <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+              NOT ON TICKET
+            </span>
+          )}
+          {redline?.status === "qty" && (
+            <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+              TICKET: {redline.was}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-slate-500">
           {part.part_number ? (
             <span className="font-mono">{part.part_number}</span>

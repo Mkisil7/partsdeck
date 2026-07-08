@@ -4,15 +4,17 @@ import {
   getUsageParts,
   getReceivedParts,
   getPartMinLevels,
+  getStockCounts,
 } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const [used, received, minLevels] = await Promise.all([
+  const [used, received, minLevels, counts] = await Promise.all([
     getUsageParts(),
     getReceivedParts(),
     getPartMinLevels(),
+    getStockCounts(),
   ]);
 
   return (
@@ -21,7 +23,12 @@ export default async function InventoryPage() {
         title="Inventory"
         subtitle="Live count, received vs. used"
       />
-      <InventoryTabs used={used} received={received} minLevels={minLevels} />
+      <InventoryTabs
+        used={used}
+        received={received}
+        minLevels={minLevels}
+        counts={counts}
+      />
     </div>
   );
 }

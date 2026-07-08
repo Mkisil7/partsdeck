@@ -76,6 +76,18 @@ export interface IgnoredItem {
   created_at: string;
 }
 
+// A persisted physical count for one part — "what I actually have", vs the
+// ledger (received - used) which is what the company thinks.
+export interface StockCount {
+  id: string;
+  user_id: string;
+  part_key: string;
+  sku: string | null;
+  part_name: string;
+  counted_qty: number;
+  counted_at: string;
+}
+
 // A per-user minimum stock level. When on-hand drops below min_quantity the
 // part is flagged as low stock.
 export interface PartMinLevel {

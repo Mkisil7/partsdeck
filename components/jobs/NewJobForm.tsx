@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
 import { PartRows } from "./PartRows";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { emptyJobDraft, parsedToDraft } from "@/lib/draft";
+import { partMatchKey } from "@/lib/buckets";
+import { baselineFromParsed, removedFromBaseline } from "@/lib/redline";
 import type { CatalogEntry } from "@/lib/master";
 import type { JobDraft, ParsedJob } from "@/lib/types";
 
@@ -51,6 +53,19 @@ export function NewJobForm({
   function patch(p: Partial<JobDraft>) {
     setDraft((d) => ({ ...d, ...p }));
   }
+
+  // Redline: once a ticket has been parsed, edits to the draft stand out.
+  const baseline = useMemo(() => baselineFromParsed(parsedData), [parsedData]);
+  const removedParts = useMemo(
+    () =>
+      removedFromBaseline(
+        baseline,
+        draft.parts
+          .filter((p) => p.part_number.trim() || p.part_name.trim())
+          .map((p) => partMatchKey(p.part_number || null, p.part_name)),
+      ),
+    [baseline, draft.parts],
+  );
 
   // -- Photo flow ----------------------------------------------------------
   async function handlePhoto(file: File) {
@@ -371,7 +386,25 @@ export function NewJobForm({
             parts={draft.parts}
             onChange={(parts) => patch({ parts })}
             catalog={catalog}
+            baseline={baseline}
           />
+          {removedParts.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {removedParts.map((r) => (
+                <li
+                  key={`removed-${r.key}`}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-red-500/40 bg-red-500/5 px-3 py-2"
+                >
+                  <span className="truncate text-sm text-slate-400 line-through">
+                    {r.part_name}
+                  </span>
+                  <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-bold text-red-300">
+                    REMOVED · TICKET: {r.quantity}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       )}

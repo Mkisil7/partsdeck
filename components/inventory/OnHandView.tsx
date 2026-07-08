@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 import {
   getBucket,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/buckets";
 import { minLevelMap } from "@/lib/lowstock";
 import type { UsagePart, ReceivedPart } from "@/lib/queries";
-import type { PartMinLevel } from "@/lib/types";
+import type { PartMinLevel, StockCount } from "@/lib/types";
 
 interface Row {
   key: string;
@@ -27,14 +28,21 @@ export function OnHandView({
   used,
   received,
   minLevels,
+  counts,
 }: {
   used: UsagePart[];
   received: ReceivedPart[];
   minLevels: PartMinLevel[];
+  counts: StockCount[];
 }) {
-  const [spotCheck, setSpotCheck] = useState(false);
-  // Physical counts entered during a spot check, keyed by row key.
-  const [counts, setCounts] = useState<Record<string, string>>({});
+  const { toast } = useToast();
+  const [counting, setCounting] = useState(false);
+  // Persisted physical counts, keyed by row key. Updated as saves succeed.
+  const [saved, setSaved] = useState<Record<string, StockCount>>(() =>
+    Object.fromEntries(counts.map((c) => [c.part_key, c])),
+  );
+  // Input drafts while count mode is open.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const mins = useMemo(() => minLevelMap(minLevels), [minLevels]);
 
@@ -68,48 +76,123 @@ export function OnHandView({
     return Array.from(map.values());
   }, [received, used]);
 
-  const totalOnHand = rows.reduce((s, r) => s + (r.received - r.used), 0);
-  const totalReceived = rows.reduce((s, r) => s + r.received, 0);
-  const totalUsed = rows.reduce((s, r) => s + r.used, 0);
+  const companyOnHand = (r: Row) => Math.max(0, r.received - r.used);
+
+  const totalCompany = rows.reduce((s, r) => s + companyOnHand(r), 0);
+  const countedRows = rows.filter((r) => saved[r.key]);
+  const totalCounted = countedRows.reduce(
+    (s, r) => s + saved[r.key].counted_qty,
+    0,
+  );
+  const mismatched = countedRows.filter(
+    (r) => saved[r.key].counted_qty !== companyOnHand(r),
+  ).length;
 
   const byBucket = BUCKET_ORDER.map((bucket) => ({
     bucket,
     items: rows
       .filter((r) => r.bucket === bucket)
-      .sort((a, b) => b.received - b.used - (a.received - a.used)),
+      .sort((a, b) => companyOnHand(b) - companyOnHand(a)),
   })).filter((g) => g.items.length > 0);
 
   // Parts at or below the user-set minimum (only ones with a threshold set).
   const lowItems = rows
     .filter((r) => {
       const min = mins.get(r.key);
-      return min != null && Math.max(0, r.received - r.used) <= min;
+      return min != null && companyOnHand(r) <= min;
     })
     .sort(
       (a, b) =>
-        Math.max(0, a.received - a.used) - (mins.get(a.key) ?? 0) -
-        (Math.max(0, b.received - b.used) - (mins.get(b.key) ?? 0)),
+        companyOnHand(a) - (mins.get(a.key) ?? 0) -
+        (companyOnHand(b) - (mins.get(b.key) ?? 0)),
     );
+
+  function startCounting() {
+    setDrafts(
+      Object.fromEntries(
+        rows.map((r) => [
+          r.key,
+          saved[r.key] ? String(saved[r.key].counted_qty) : "",
+        ]),
+      ),
+    );
+    setCounting(true);
+  }
+
+  async function persistCount(row: Row) {
+    const raw = (drafts[row.key] ?? "").trim();
+    const existing = saved[row.key];
+
+    // Cleared input removes the saved count.
+    if (raw === "") {
+      if (!existing) return;
+      try {
+        const res = await fetch("/api/stock-counts", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ part_key: row.key }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+        setSaved((s) => {
+          const next = { ...s };
+          delete next[row.key];
+          return next;
+        });
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not clear count", "error");
+      }
+      return;
+    }
+
+    const qty = parseInt(raw, 10);
+    if (!Number.isFinite(qty) || qty < 0) {
+      toast("Enter a valid count", "error");
+      return;
+    }
+    if (existing && existing.counted_qty === qty) return;
+
+    try {
+      const res = await fetch("/api/stock-counts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          part_key: row.key,
+          part_number: row.part_number,
+          part_name: row.part_name,
+          counted_qty: qty,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+      setSaved((s) => ({ ...s, [row.key]: json.count as StockCount }));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not save count", "error");
+    }
+  }
 
   return (
     <div>
       <div className="mb-4 grid grid-cols-3 gap-2">
-        <Stat label="On hand" value={totalOnHand} accent />
-        <Stat label="Received" value={totalReceived} />
-        <Stat label="Used" value={totalUsed} />
+        <Stat label="Company says" value={totalCompany} accent />
+        <Stat label="You counted" value={totalCounted} />
+        <Stat
+          label="Mismatched"
+          value={mismatched}
+          danger={mismatched > 0}
+        />
       </div>
 
       <button
         type="button"
-        onClick={() => setSpotCheck((s) => !s)}
+        onClick={() => (counting ? setCounting(false) : startCounting())}
         className={cn(
           "mb-4 w-full rounded-xl border py-2.5 text-sm font-semibold transition",
-          spotCheck
+          counting
             ? "border-gold bg-gold/10 text-gold-400"
             : "border-navy-600 bg-navy-700/40 text-slate-300",
         )}
       >
-        {spotCheck ? "Done spot checking" : "Start spot check"}
+        {counting ? "Done counting" : "Count my inventory"}
       </button>
 
       {lowItems.length > 0 && (
@@ -126,7 +209,7 @@ export function OnHandView({
               >
                 <span className="truncate">{r.part_name}</span>
                 <span className="shrink-0 font-semibold tabular-nums">
-                  {Math.max(0, r.received - r.used)} / {mins.get(r.key)} min
+                  {companyOnHand(r)} / {mins.get(r.key)} min
                 </span>
               </li>
             ))}
@@ -147,12 +230,11 @@ export function OnHandView({
               </h2>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.items.map((item) => {
-                  const onHand = Math.max(0, item.received - item.used);
+                  const company = companyOnHand(item);
                   const min = mins.get(item.key);
-                  const low = min != null && onHand <= min;
-                  const raw = counts[item.key];
-                  const actual = raw === "" || raw === undefined ? null : parseInt(raw, 10);
-                  const diff = actual == null ? null : actual - onHand;
+                  const low = min != null && company <= min;
+                  const count = saved[item.key];
+                  const diff = count ? count.counted_qty - company : null;
                   return (
                     <li
                       key={item.key}
@@ -180,21 +262,33 @@ export function OnHandView({
                             </p>
                           )}
                         </div>
-                        <div className="shrink-0 text-right">
-                          <span
-                            className={cn(
-                              "text-lg font-bold tabular-nums",
-                              onHand < 0 ? "text-red-300" : "text-slate-100",
-                            )}
-                          >
-                            {onHand}
-                          </span>
-                          <span className="block text-[10px] text-slate-500">
-                            on hand
-                          </span>
+                        <div className="flex shrink-0 items-start gap-4 text-right">
+                          <div>
+                            <span className="text-lg font-bold tabular-nums text-slate-100">
+                              {company}
+                            </span>
+                            <span className="block text-[10px] text-slate-500">
+                              company
+                            </span>
+                          </div>
+                          {count && (
+                            <div>
+                              <span
+                                className={cn(
+                                  "text-lg font-bold tabular-nums",
+                                  diff === 0 ? "text-green-300" : "text-red-300",
+                                )}
+                              >
+                                {count.counted_qty}
+                              </span>
+                              <span className="block text-[10px] text-slate-500">
+                                you have
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
                         <span>+{item.received} received</span>
                         <span>−{item.used} used</span>
                         {min != null && (
@@ -202,39 +296,47 @@ export function OnHandView({
                             min {min}
                           </span>
                         )}
+                        {count && (
+                          <span
+                            className={cn(
+                              "font-semibold",
+                              diff === 0
+                                ? "text-green-300"
+                                : diff != null && diff < 0
+                                  ? "text-red-300"
+                                  : "text-amber-300",
+                            )}
+                          >
+                            {diff === 0
+                              ? "✓ matches"
+                              : diff != null && diff < 0
+                                ? `${Math.abs(diff)} missing`
+                                : `${diff} extra`}{" "}
+                            · counted {new Date(count.counted_at).toLocaleDateString()}
+                          </span>
+                        )}
                       </div>
 
-                      {spotCheck && (
+                      {counting && (
                         <div className="mt-2 flex items-center gap-2 border-t border-navy-600/60 pt-2">
-                          <span className="text-xs text-slate-400">Counted</span>
+                          <span className="text-xs text-slate-400">
+                            I actually have
+                          </span>
                           <input
                             type="number"
+                            min={0}
                             inputMode="numeric"
                             placeholder="—"
                             className="input w-20 py-1 text-center"
-                            value={raw ?? ""}
+                            value={drafts[item.key] ?? ""}
                             onChange={(e) =>
-                              setCounts((c) => ({ ...c, [item.key]: e.target.value }))
+                              setDrafts((d) => ({ ...d, [item.key]: e.target.value }))
                             }
+                            onBlur={() => persistCount(item)}
                           />
-                          {diff != null && (
-                            <span
-                              className={cn(
-                                "text-xs font-semibold",
-                                diff === 0
-                                  ? "text-green-300"
-                                  : diff < 0
-                                    ? "text-red-300"
-                                    : "text-amber-300",
-                              )}
-                            >
-                              {diff === 0
-                                ? "✓ matches"
-                                : diff < 0
-                                  ? `${Math.abs(diff)} missing`
-                                  : `${diff} extra`}
-                            </span>
-                          )}
+                          <span className="text-[11px] text-slate-500">
+                            saves automatically
+                          </span>
                         </div>
                       )}
                     </li>
@@ -253,17 +355,19 @@ function Stat({
   label,
   value,
   accent,
+  danger,
 }: {
   label: string;
   value: number;
   accent?: boolean;
+  danger?: boolean;
 }) {
   return (
     <div className="card p-3">
       <span
         className={cn(
           "text-2xl font-extrabold tabular-nums",
-          accent ? "text-gold-400" : "text-slate-100",
+          danger ? "text-red-300" : accent ? "text-gold-400" : "text-slate-100",
         )}
       >
         {value}
