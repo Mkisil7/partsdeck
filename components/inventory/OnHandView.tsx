@@ -50,6 +50,8 @@ export function OnHandView({
 }) {
   const { toast } = useToast();
   const [counting, setCounting] = useState(false);
+  // Quick filter for spot checks — matches part name or SKU.
+  const [partQuery, setPartQuery] = useState("");
   // Parts removed from the list, keyed by row key.
   const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenPart>>(() =>
     Object.fromEntries(hidden.map((h) => [h.part_key, h])),
@@ -127,9 +129,18 @@ export function OnHandView({
     (r) => saved[r.key].counted_qty !== companyOnHand(r),
   ).length;
 
+  const q = partQuery.trim().toLowerCase();
+  const searchedRows = q
+    ? visibleRows.filter(
+        (r) =>
+          r.part_name.toLowerCase().includes(q) ||
+          (r.part_number ?? "").toLowerCase().includes(q),
+      )
+    : visibleRows;
+
   const byBucket = BUCKET_ORDER.map((bucket) => ({
     bucket,
-    items: visibleRows
+    items: searchedRows
       .filter((r) => r.bucket === bucket)
       .sort((a, b) => companyOnHand(b) - companyOnHand(a)),
   })).filter((g) => g.items.length > 0);
@@ -334,6 +345,15 @@ export function OnHandView({
         <Stat label="Mismatched" value={mismatched} danger={mismatched > 0} />
       </div>
 
+      <input
+        type="search"
+        inputMode="search"
+        placeholder="Search part name or SKU…"
+        className="input mb-2"
+        value={partQuery}
+        onChange={(e) => setPartQuery(e.target.value)}
+      />
+
       <button
         type="button"
         onClick={() => (counting ? setCounting(false) : startCounting())}
@@ -386,6 +406,10 @@ export function OnHandView({
       {rows.length === 0 ? (
         <div className="card text-center text-sm text-slate-400">
           No inventory yet. Tap “Receive Inventory” on the dashboard to log a pickup.
+        </div>
+      ) : byBucket.length === 0 ? (
+        <div className="card text-center text-sm text-slate-400">
+          No parts match “{partQuery.trim()}”.
         </div>
       ) : (
         <div className="space-y-6">

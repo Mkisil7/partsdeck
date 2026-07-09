@@ -30,6 +30,19 @@ body {
     min-height: 48px;
   }
 
+  /* iOS/WebKit date inputs have an intrinsic min-width and ignore w-full
+     inside flex rows, which made side-by-side pickers overlap. Force them
+     to behave like normal block inputs. */
+  input[type="date"].input {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    display: block;
+  }
+  input[type="date"].input::-webkit-date-and-time-value {
+    text-align: left;
+  }
+
   .label {
     @apply mb-1.5 block text-sm font-medium text-slate-300;
   }
