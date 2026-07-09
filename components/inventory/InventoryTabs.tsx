@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import { UsageView } from "./UsageView";
 import { OnHandView } from "./OnHandView";
 import type { UsagePart, ReceivedPart } from "@/lib/queries";
-import type { PartMinLevel, StockCount } from "@/lib/types";
+import type { CatalogEntry } from "@/lib/master";
+import type { CompanyCount, PartMinLevel, StockCount } from "@/lib/types";
 
 type Tab = "onhand" | "used";
 
@@ -14,11 +15,15 @@ export function InventoryTabs({
   received,
   minLevels,
   counts,
+  companyCounts,
+  catalog,
 }: {
   used: UsagePart[];
   received: ReceivedPart[];
   minLevels: PartMinLevel[];
   counts: StockCount[];
+  companyCounts: CompanyCount[];
+  catalog: CatalogEntry[];
 }) {
   const [tab, setTab] = useState<Tab>("onhand");
 
@@ -39,6 +44,8 @@ export function InventoryTabs({
           received={received}
           minLevels={minLevels}
           counts={counts}
+          companyCounts={companyCounts}
+          catalog={catalog}
         />
       ) : (
         <UsageView parts={used} />

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import { PartSearchInput } from "@/components/parts/PartSearchInput";
 import { cn } from "@/lib/utils";
 import {
   getBucket,
@@ -12,7 +13,8 @@ import {
 } from "@/lib/buckets";
 import { minLevelMap } from "@/lib/lowstock";
 import type { UsagePart, ReceivedPart } from "@/lib/queries";
-import type { PartMinLevel, StockCount } from "@/lib/types";
+import type { CatalogEntry } from "@/lib/master";
+import type { CompanyCount, PartMinLevel, StockCount } from "@/lib/types";
 
 interface Row {
   key: string;
@@ -29,20 +31,34 @@ export function OnHandView({
   received,
   minLevels,
   counts,
+  companyCounts,
+  catalog = [],
 }: {
   used: UsagePart[];
   received: ReceivedPart[];
   minLevels: PartMinLevel[];
   counts: StockCount[];
+  companyCounts: CompanyCount[];
+  catalog?: CatalogEntry[];
 }) {
   const { toast } = useToast();
   const [counting, setCounting] = useState(false);
-  // Persisted physical counts, keyed by row key. Updated as saves succeed.
+
+  // Persisted physical counts ("I actually have"), keyed by row key.
   const [saved, setSaved] = useState<Record<string, StockCount>>(() =>
     Object.fromEntries(counts.map((c) => [c.part_key, c])),
   );
+  // Persisted company overrides ("company thinks"), keyed by row key.
+  const [overrides, setOverrides] = useState<Record<string, CompanyCount>>(() =>
+    Object.fromEntries(companyCounts.map((c) => [c.part_key, c])),
+  );
   // Input drafts while count mode is open.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [companyDrafts, setCompanyDrafts] = useState<Record<string, string>>({});
+  // Parts added via search this session (not yet in the ledger).
+  const [extraParts, setExtraParts] = useState<
+    { part_number: string | null; part_name: string; unit: string }[]
+  >([]);
 
   const mins = useMemo(() => minLevelMap(minLevels), [minLevels]);
 
@@ -73,10 +89,19 @@ export function OnHandView({
       row.used += u.quantity;
       if (!row.part_number && u.part_number) row.part_number = u.part_number;
     }
+    // Parts known only from saved counts/overrides (or added via search this
+    // session) still get a row, so company-set figures never disappear.
+    for (const c of companyCounts) ensure(c.sku, c.part_name, "each");
+    for (const c of counts) ensure(c.sku, c.part_name, "each");
+    for (const e of extraParts) ensure(e.part_number, e.part_name, e.unit);
     return Array.from(map.values());
-  }, [received, used]);
+  }, [received, used, counts, companyCounts, extraParts]);
 
-  const companyOnHand = (r: Row) => Math.max(0, r.received - r.used);
+  // "Company thinks": manual override when set, else the ledger figure.
+  const companyOnHand = (r: Row) =>
+    overrides[r.key]
+      ? overrides[r.key].company_qty
+      : Math.max(0, r.received - r.used);
 
   const totalCompany = rows.reduce((s, r) => s + companyOnHand(r), 0);
   const countedRows = rows.filter((r) => saved[r.key]);
@@ -116,7 +141,81 @@ export function OnHandView({
         ]),
       ),
     );
+    setCompanyDrafts(
+      Object.fromEntries(rows.map((r) => [r.key, String(companyOnHand(r))])),
+    );
     setCounting(true);
+  }
+
+  function addTrackedPart(entry: CatalogEntry) {
+    const key = partMatchKey(entry.sku, entry.part_name);
+    if (rows.some((r) => r.key === key)) {
+      toast("That part is already listed", "info");
+      return;
+    }
+    setExtraParts((prev) => [
+      ...prev,
+      {
+        part_number: entry.sku,
+        part_name: entry.part_name,
+        unit: entry.unit || "each",
+      },
+    ]);
+    setDrafts((d) => ({ ...d, [key]: "" }));
+    setCompanyDrafts((d) => ({ ...d, [key]: "" }));
+  }
+
+  async function persistCompany(row: Row) {
+    const raw = (companyDrafts[row.key] ?? "").trim();
+    const existing = overrides[row.key];
+    const derived = Math.max(0, row.received - row.used);
+
+    // Cleared input reverts to the derived ledger figure.
+    if (raw === "") {
+      if (!existing) return;
+      try {
+        const res = await fetch("/api/company-counts", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ part_key: row.key }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+        setOverrides((s) => {
+          const next = { ...s };
+          delete next[row.key];
+          return next;
+        });
+        setCompanyDrafts((d) => ({ ...d, [row.key]: String(derived) }));
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not update", "error");
+      }
+      return;
+    }
+
+    const qty = parseInt(raw, 10);
+    if (!Number.isFinite(qty) || qty < 0) {
+      toast("Enter a valid number", "error");
+      return;
+    }
+    if (existing ? existing.company_qty === qty : qty === derived) return;
+
+    try {
+      const res = await fetch("/api/company-counts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          part_key: row.key,
+          part_number: row.part_number,
+          part_name: row.part_name,
+          company_qty: qty,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Save failed");
+      setOverrides((s) => ({ ...s, [row.key]: json.count as CompanyCount }));
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not save", "error");
+    }
   }
 
   async function persistCount(row: Row) {
@@ -175,11 +274,7 @@ export function OnHandView({
       <div className="mb-4 grid grid-cols-3 gap-2">
         <Stat label="Company says" value={totalCompany} accent />
         <Stat label="You counted" value={totalCounted} />
-        <Stat
-          label="Mismatched"
-          value={mismatched}
-          danger={mismatched > 0}
-        />
+        <Stat label="Mismatched" value={mismatched} danger={mismatched > 0} />
       </div>
 
       <button
@@ -192,8 +287,21 @@ export function OnHandView({
             : "border-navy-600 bg-navy-700/40 text-slate-300",
         )}
       >
-        {counting ? "Done counting" : "Count my inventory"}
+        {counting ? "Done updating" : "Update counts"}
       </button>
+
+      {counting && (
+        <div className="mb-4">
+          <PartSearchInput
+            catalog={catalog}
+            onPick={addTrackedPart}
+            placeholder="Add a part that isn’t listed…"
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            For parts the company says you have but you’ve never logged here.
+          </p>
+        </div>
+      )}
 
       {lowItems.length > 0 && (
         <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
@@ -231,6 +339,7 @@ export function OnHandView({
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.items.map((item) => {
                   const company = companyOnHand(item);
+                  const override = overrides[item.key];
                   const min = mins.get(item.key);
                   const low = min != null && company <= min;
                   const count = saved[item.key];
@@ -291,6 +400,11 @@ export function OnHandView({
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
                         <span>+{item.received} received</span>
                         <span>−{item.used} used</span>
+                        {override && (
+                          <span className="text-sky-300">
+                            company set {new Date(override.set_at).toLocaleDateString()}
+                          </span>
+                        )}
                         {min != null && (
                           <span className={cn(low && "text-amber-300")}>
                             min {min}
@@ -318,25 +432,47 @@ export function OnHandView({
                       </div>
 
                       {counting && (
-                        <div className="mt-2 flex items-center gap-2 border-t border-navy-600/60 pt-2">
-                          <span className="text-xs text-slate-400">
-                            I actually have
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            inputMode="numeric"
-                            placeholder="—"
-                            className="input w-20 py-1 text-center"
-                            value={drafts[item.key] ?? ""}
-                            onChange={(e) =>
-                              setDrafts((d) => ({ ...d, [item.key]: e.target.value }))
-                            }
-                            onBlur={() => persistCount(item)}
-                          />
-                          <span className="text-[11px] text-slate-500">
-                            saves automatically
-                          </span>
+                        <div className="mt-2 grid grid-cols-2 gap-2 border-t border-navy-600/60 pt-2">
+                          <label>
+                            <span className="mb-1 block text-[11px] text-slate-400">
+                              Company thinks
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              placeholder="—"
+                              className="input w-full py-1 text-center"
+                              value={companyDrafts[item.key] ?? ""}
+                              onChange={(e) =>
+                                setCompanyDrafts((d) => ({
+                                  ...d,
+                                  [item.key]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => persistCompany(item)}
+                            />
+                          </label>
+                          <label>
+                            <span className="mb-1 block text-[11px] text-slate-400">
+                              I actually have
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              placeholder="—"
+                              className="input w-full py-1 text-center"
+                              value={drafts[item.key] ?? ""}
+                              onChange={(e) =>
+                                setDrafts((d) => ({ ...d, [item.key]: e.target.value }))
+                              }
+                              onBlur={() => persistCount(item)}
+                            />
+                          </label>
+                          <p className="col-span-2 text-[11px] text-slate-500">
+                            Saves automatically when you tap away.
+                          </p>
                         </div>
                       )}
                     </li>

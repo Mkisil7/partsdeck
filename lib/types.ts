@@ -88,6 +88,18 @@ export interface StockCount {
   counted_at: string;
 }
 
+// Manual override of what the company thinks the tech has for one part.
+// When present it replaces the derived ledger figure (received - used).
+export interface CompanyCount {
+  id: string;
+  user_id: string;
+  part_key: string;
+  sku: string | null;
+  part_name: string;
+  company_qty: number;
+  set_at: string;
+}
+
 // A per-user minimum stock level. When on-hand drops below min_quantity the
 // part is flagged as low stock.
 export interface PartMinLevel {

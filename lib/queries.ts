@@ -2,6 +2,7 @@
 // client, so results are automatically limited to the signed-in user.
 import { createSupabaseServerClient } from "./supabase";
 import type {
+  CompanyCount,
   IgnoredItem,
   InventoryReceipt,
   Job,
@@ -163,6 +164,16 @@ export async function getMasterParts(): Promise<MasterPart[]> {
     .order("part_name", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []) as MasterPart[];
+}
+
+export async function getCompanyCounts(): Promise<CompanyCount[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("company_counts")
+    .select("*")
+    .order("part_name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CompanyCount[];
 }
 
 export async function getStockCounts(): Promise<StockCount[]> {
