@@ -6,21 +6,30 @@ import {
   getPartMinLevels,
   getStockCounts,
   getCompanyCounts,
+  getHiddenParts,
   getMasterParts,
 } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const [used, received, minLevels, counts, companyCounts, masterParts] =
-    await Promise.all([
-      getUsageParts(),
-      getReceivedParts(),
-      getPartMinLevels(),
-      getStockCounts(),
-      getCompanyCounts(),
-      getMasterParts(),
-    ]);
+  const [
+    used,
+    received,
+    minLevels,
+    counts,
+    companyCounts,
+    hidden,
+    masterParts,
+  ] = await Promise.all([
+    getUsageParts(),
+    getReceivedParts(),
+    getPartMinLevels(),
+    getStockCounts(),
+    getCompanyCounts(),
+    getHiddenParts(),
+    getMasterParts(),
+  ]);
 
   const catalog = masterParts.map((m) => ({
     sku: m.sku,
@@ -41,6 +50,7 @@ export default async function InventoryPage() {
         minLevels={minLevels}
         counts={counts}
         companyCounts={companyCounts}
+        hidden={hidden}
         catalog={catalog}
       />
     </div>

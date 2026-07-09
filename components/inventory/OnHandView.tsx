@@ -14,7 +14,12 @@ import {
 import { minLevelMap } from "@/lib/lowstock";
 import type { UsagePart, ReceivedPart } from "@/lib/queries";
 import type { CatalogEntry } from "@/lib/master";
-import type { CompanyCount, PartMinLevel, StockCount } from "@/lib/types";
+import type {
+  CompanyCount,
+  HiddenPart,
+  PartMinLevel,
+  StockCount,
+} from "@/lib/types";
 
 interface Row {
   key: string;
@@ -32,6 +37,7 @@ export function OnHandView({
   minLevels,
   counts,
   companyCounts,
+  hidden,
   catalog = [],
 }: {
   used: UsagePart[];
@@ -39,10 +45,15 @@ export function OnHandView({
   minLevels: PartMinLevel[];
   counts: StockCount[];
   companyCounts: CompanyCount[];
+  hidden: HiddenPart[];
   catalog?: CatalogEntry[];
 }) {
   const { toast } = useToast();
   const [counting, setCounting] = useState(false);
+  // Parts removed from the list, keyed by row key.
+  const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenPart>>(() =>
+    Object.fromEntries(hidden.map((h) => [h.part_key, h])),
+  );
 
   // Persisted physical counts ("I actually have"), keyed by row key.
   const [saved, setSaved] = useState<Record<string, StockCount>>(() =>
@@ -97,14 +108,17 @@ export function OnHandView({
     return Array.from(map.values());
   }, [received, used, counts, companyCounts, extraParts]);
 
-  // "Company thinks": manual override when set, else the ledger figure.
+  // Rows the tech removed from the list stay out of every calculation.
+  const visibleRows = rows.filter((r) => !hiddenMap[r.key]);
+
+  // "Inventory" figure: manual override when set, else the ledger figure.
   const companyOnHand = (r: Row) =>
     overrides[r.key]
       ? overrides[r.key].company_qty
       : Math.max(0, r.received - r.used);
 
-  const totalCompany = rows.reduce((s, r) => s + companyOnHand(r), 0);
-  const countedRows = rows.filter((r) => saved[r.key]);
+  const totalCompany = visibleRows.reduce((s, r) => s + companyOnHand(r), 0);
+  const countedRows = visibleRows.filter((r) => saved[r.key]);
   const totalCounted = countedRows.reduce(
     (s, r) => s + saved[r.key].counted_qty,
     0,
@@ -115,13 +129,13 @@ export function OnHandView({
 
   const byBucket = BUCKET_ORDER.map((bucket) => ({
     bucket,
-    items: rows
+    items: visibleRows
       .filter((r) => r.bucket === bucket)
       .sort((a, b) => companyOnHand(b) - companyOnHand(a)),
   })).filter((g) => g.items.length > 0);
 
   // Parts at or below the user-set minimum (only ones with a threshold set).
-  const lowItems = rows
+  const lowItems = visibleRows
     .filter((r) => {
       const min = mins.get(r.key);
       return min != null && companyOnHand(r) <= min;
@@ -135,24 +149,47 @@ export function OnHandView({
   function startCounting() {
     setDrafts(
       Object.fromEntries(
-        rows.map((r) => [
+        visibleRows.map((r) => [
           r.key,
           saved[r.key] ? String(saved[r.key].counted_qty) : "",
         ]),
       ),
     );
     setCompanyDrafts(
-      Object.fromEntries(rows.map((r) => [r.key, String(companyOnHand(r))])),
+      Object.fromEntries(
+        visibleRows.map((r) => [r.key, String(companyOnHand(r))]),
+      ),
     );
     setCounting(true);
   }
 
-  function addTrackedPart(entry: CatalogEntry) {
+  async function addTrackedPart(entry: CatalogEntry) {
     const key = partMatchKey(entry.sku, entry.part_name);
-    if (rows.some((r) => r.key === key)) {
+
+    // Re-adding a removed part just unhides it.
+    if (hiddenMap[key]) {
+      try {
+        const res = await fetch("/api/hidden-parts", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ part_key: key }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || "Failed");
+        setHiddenMap((m) => {
+          const next = { ...m };
+          delete next[key];
+          return next;
+        });
+        toast("Part added back to the list", "success");
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not add", "error");
+      }
+      if (rows.some((r) => r.key === key)) return;
+    } else if (rows.some((r) => r.key === key)) {
       toast("That part is already listed", "info");
       return;
     }
+
     setExtraParts((prev) => [
       ...prev,
       {
@@ -163,6 +200,26 @@ export function OnHandView({
     ]);
     setDrafts((d) => ({ ...d, [key]: "" }));
     setCompanyDrafts((d) => ({ ...d, [key]: "" }));
+  }
+
+  async function removePart(row: Row) {
+    try {
+      const res = await fetch("/api/hidden-parts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          part_key: row.key,
+          part_number: row.part_number,
+          part_name: row.part_name,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Remove failed");
+      setHiddenMap((m) => ({ ...m, [row.key]: json.hidden as HiddenPart }));
+      toast("Removed — add it back anytime via the part search", "success");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not remove", "error");
+    }
   }
 
   async function persistCompany(row: Row) {
@@ -272,8 +329,8 @@ export function OnHandView({
   return (
     <div>
       <div className="mb-4 grid grid-cols-3 gap-2">
-        <Stat label="Company says" value={totalCompany} accent />
-        <Stat label="You counted" value={totalCounted} />
+        <Stat label="Inventory" value={totalCompany} accent />
+        <Stat label="On hand" value={totalCounted} />
         <Stat label="Mismatched" value={mismatched} danger={mismatched > 0} />
       </div>
 
@@ -298,7 +355,8 @@ export function OnHandView({
             placeholder="Add a part that isn’t listed…"
           />
           <p className="mt-1 text-[11px] text-slate-500">
-            For parts the company says you have but you’ve never logged here.
+            For parts on the inventory that you’ve never logged here, or ones
+            you removed.
           </p>
         </div>
       )}
@@ -377,7 +435,7 @@ export function OnHandView({
                               {company}
                             </span>
                             <span className="block text-[10px] text-slate-500">
-                              company
+                              inventory
                             </span>
                           </div>
                           {count && (
@@ -391,7 +449,7 @@ export function OnHandView({
                                 {count.counted_qty}
                               </span>
                               <span className="block text-[10px] text-slate-500">
-                                you have
+                                on hand
                               </span>
                             </div>
                           )}
@@ -402,7 +460,7 @@ export function OnHandView({
                         <span>−{item.used} used</span>
                         {override && (
                           <span className="text-sky-300">
-                            company set {new Date(override.set_at).toLocaleDateString()}
+                            inventory set {new Date(override.set_at).toLocaleDateString()}
                           </span>
                         )}
                         {min != null && (
@@ -435,7 +493,7 @@ export function OnHandView({
                         <div className="mt-2 grid grid-cols-2 gap-2 border-t border-navy-600/60 pt-2">
                           <label>
                             <span className="mb-1 block text-[11px] text-slate-400">
-                              Company thinks
+                              Inventory
                             </span>
                             <input
                               type="number"
@@ -455,7 +513,7 @@ export function OnHandView({
                           </label>
                           <label>
                             <span className="mb-1 block text-[11px] text-slate-400">
-                              I actually have
+                              On hand
                             </span>
                             <input
                               type="number"
@@ -470,9 +528,18 @@ export function OnHandView({
                               onBlur={() => persistCount(item)}
                             />
                           </label>
-                          <p className="col-span-2 text-[11px] text-slate-500">
-                            Saves automatically when you tap away.
-                          </p>
+                          <div className="col-span-2 flex items-center justify-between">
+                            <p className="text-[11px] text-slate-500">
+                              Saves automatically when you tap away.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => removePart(item)}
+                              className="text-[11px] font-semibold text-red-300 hover:text-red-200"
+                            >
+                              Remove from list
+                            </button>
+                          </div>
                         </div>
                       )}
                     </li>

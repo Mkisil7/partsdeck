@@ -100,6 +100,16 @@ export interface CompanyCount {
   set_at: string;
 }
 
+// A part the tech removed from their On Hand list.
+export interface HiddenPart {
+  id: string;
+  user_id: string;
+  part_key: string;
+  sku: string | null;
+  part_name: string;
+  created_at: string;
+}
+
 // A per-user minimum stock level. When on-hand drops below min_quantity the
 // part is flagged as low stock.
 export interface PartMinLevel {
