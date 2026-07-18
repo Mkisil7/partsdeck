@@ -1,0 +1,39 @@
+name: Keep Supabase awake
+
+# Supabase's free tier pauses a project after ~7 days with no activity, which
+# takes the whole app offline until it's manually restored. This workflow pings
+# the database once a day so the inactivity timer never reaches that threshold.
+#
+# The key below is the PUBLIC anon/publishable key — the same one shipped in the
+# browser bundle. It is safe to commit: it only ever sees data that Row Level
+# Security allows an anonymous visitor to see (which is nothing here), so the
+# ping touches the database without exposing anything.
+
+on:
+  schedule:
+    # 08:17 UTC daily. Odd minute on purpose — GitHub delays/skips schedules
+    # that pile up at the top of the hour. Daily leaves a wide margin under the
+    # 7-day pause window even if a run or two gets skipped.
+    - cron: "17 8 * * *"
+  workflow_dispatch: {} # lets you run it on demand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          set -euo pipefail
+          URL="https://bbyhbwajcydbxlkzhrhr.supabase.co/rest/v1/master_parts?select=id&limit=1"
+          KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJieWhid2FqY3lkYnhsa3pocmhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMjAyMjIsImV4cCI6MjA5NTg5NjIyMn0.tjeUv48Zaw_M1WC8KNu-Dc9MNM4pc16x8in5z1W8apw"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "$URL" \
+            -H "apikey: $KEY" \
+            -H "Authorization: Bearer $KEY")
+          echo "Supabase responded with HTTP $code"
+          # Any real HTTP response means the project is awake (that's the point).
+          # Only a total failure (no response) or a server error should fail the run.
+          if [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
+            echo "::error::Supabase did not respond normally (HTTP $code)"
+            exit 1
+          fi
